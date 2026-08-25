@@ -50,5 +50,19 @@
     "timestamp": "2026-08-25T01:53:31+00:00",
     "whitelisted": false,
     "extra": {}
+  },
+  {
+    "stage": "build_gold",
+    "rows_in": 389242,
+    "rows_out": 389242,
+    "rows_dropped": 0,
+    "pct_dropped": 0.0,
+    "reason": "deterministic feature transforms; rows are only dropped if price falls outside every tier bin, which the silver price gate already prevents",
+    "duration_s": 3.235,
+    "timestamp": "2026-08-25T02:11:47+00:00",
+    "whitelisted": false,
+    "extra": {
+      "n_features": 49
+    }
   }
 ]

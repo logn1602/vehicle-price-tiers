@@ -27,6 +27,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from src.config import config_hash, file_hash
+from src.features import feature_matrix
 from src.schema import RAW_COLUMNS, RAW_DTYPES, raw_schema, silver_schema
 from src.schema import validate as validate_schema
 from src.validate import LineageTracker, check_contract
@@ -344,4 +345,104 @@ def build_silver(
         "lineage": tracker.as_list()[first_record:],
     }
     write_manifest(silver_dir, manifest)
+    return manifest
+
+
+# ---------------------------------------------------------------------------
+# gold
+# ---------------------------------------------------------------------------
+def build_gold(
+    cfg: dict,
+    tracker: LineageTracker,
+    force: bool = False,
+) -> dict[str, Any]:
+    """Apply the feature transforms to silver and materialise the model input.
+
+    No fitting happens here. Every learned quantity -- medians, variances,
+    feature selection, scaling -- belongs to the sklearn Pipeline and is fitted
+    on the training split only. Gold is a deterministic function of silver, so
+    it can safely be computed once for the whole dataset before the split.
+    """
+    silver_dir = Path(cfg["paths"]["silver"])
+    gold_dir = Path(cfg["paths"]["gold"])
+    if not silver_dir.exists():
+        raise FileNotFoundError(f"{silver_dir} not found -- run build_silver first.")
+
+    silver_manifest = read_manifest(silver_dir) or {}
+    cache_key = {
+        "version": CACHE_VERSION,
+        "input_hash": silver_manifest.get("input_hash", ""),
+        "config_hash": config_hash({"features": cfg["features"], "target": cfg["target"]}),
+    }
+
+    if gold_dir.exists() and is_fresh(gold_dir, cache_key) and not force:
+        manifest = read_manifest(gold_dir)
+        print(f"  cache hit -- reusing {gold_dir}")
+        tracker.replay(manifest["lineage"])
+        return manifest
+
+    if gold_dir.exists():
+        shutil.rmtree(gold_dir)
+    gold_dir.mkdir(parents=True, exist_ok=True)
+
+    print("  reading silver...")
+    df = pq.read_table(silver_dir).to_pandas()
+    rows_in = len(df)
+
+    first_record = len(tracker.records)
+    with tracker.stage(
+        "build_gold",
+        rows_in,
+        "deterministic feature transforms; rows are only dropped if price falls "
+        "outside every tier bin, which the silver price gate already prevents",
+    ) as st:
+        X, y, feat_manifest = feature_matrix(df, cfg)
+        keep = y.notna()
+        X, y = X[keep], y[keep]
+        st.rows_out = len(X)
+        st.extra = {"n_features": feat_manifest["n_features"]}
+
+    out = X.copy()
+    out[cfg["target"]["name"]] = y.astype(str)
+    out["id"] = df.loc[keep, "id"].to_numpy()
+
+    dst = gold_dir / "features.parquet"
+    pq.write_table(
+        pa.Table.from_pandas(out, preserve_index=False),
+        dst,
+        compression=cfg["ingest"]["compression"],
+    )
+
+    class_counts = y.value_counts().reindex(cfg["target"]["labels"]).to_dict()
+    manifest = {
+        **cache_key,
+        "rows_in": rows_in,
+        "rows_out": int(len(X)),
+        "destination": str(dst),
+        "gold_bytes": dst.stat().st_size,
+        "feature_groups": feat_manifest["counts"],
+        "feature_names": feat_manifest["feature_names"],
+        "n_features": feat_manifest["n_features"],
+        "class_counts": {k: int(v) for k, v in class_counts.items()},
+        "lineage": tracker.as_list()[first_record:],
+    }
+    write_manifest(gold_dir, manifest)
+
+    # A standalone copy under results/ so the README generator and the feature
+    # tests can read the manifest without touching the gitignored data tree.
+    results_dir = Path(cfg["paths"]["results"])
+    results_dir.mkdir(parents=True, exist_ok=True)
+    (results_dir / "feature_manifest.json").write_text(
+        json.dumps(
+            {
+                "groups": feat_manifest["counts"],
+                "feature_names": feat_manifest["feature_names"],
+                "n_features": feat_manifest["n_features"],
+                "class_counts": manifest["class_counts"],
+                "rows": manifest["rows_out"],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
     return manifest

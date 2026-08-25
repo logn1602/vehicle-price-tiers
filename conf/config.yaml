@@ -115,6 +115,36 @@ features:
   # and was silently coerced to 0 downstream.
   clip_negative_age: true
 
+  # Bucket edges. These are tunable, so they live here. The brand/body/fuel
+  # taxonomies stay in src/features.py: they are domain vocabulary, not knobs,
+  # and putting 40 marque names in a config file makes neither easier to read.
+  thresholds:
+    age_new: 3
+    age_old: 15
+    age_vintage: 25
+    age_buckets: [3, 7, 15, 25]          # -> ordinal 1..5
+    mileage_buckets: [30000, 60000, 100000, 150000]   # -> ordinal 1..5
+    mileage_low: 50000
+    mileage_high: 100000
+    mileage_very_high: 150000
+    mileage_per_year_low: 10000
+    mileage_per_year_high: 15000
+    decade_divisor: 10
+
+  # Ordinal encoding for seller-reported condition. `unknown` is deliberately
+  # absent: v1 mapped it to 2, the same value as "fair", which silently
+  # asserted a condition for the ~40% of listings that do not report one.
+  # Missing stays missing here and is resolved by the imputer inside the
+  # Pipeline, fitted on training data only.
+  condition_scale:
+    new: 6
+    like new: 5
+    excellent: 4
+    good: 3
+    fair: 2
+    poor: 1
+    salvage: 0
+
 # ---------------------------------------------------------------------------
 # Modelling
 # ---------------------------------------------------------------------------

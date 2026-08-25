@@ -22,10 +22,10 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.config import load_config  # noqa: E402
-from src.ingest import build_silver, ingest_bronze  # noqa: E402
+from src.ingest import build_gold, build_silver, ingest_bronze  # noqa: E402
 from src.validate import LineageTracker  # noqa: E402
 
-ALL_STAGES = ["ingest", "silver"]
+ALL_STAGES = ["ingest", "silver", "gold"]
 
 
 def set_seeds(seed: int) -> None:
@@ -100,6 +100,17 @@ def main(argv: list[str] | None = None) -> int:
             f"  {sm['rows_out']:,} rows across {sm['n_partitions']} partitions "
             f"({sm['silver_bytes'] / 1e6:,.1f} MB)"
         )
+
+    if "gold" in stages:
+        print("\n[gold] silver -> model-ready feature store")
+        gm = build_gold(cfg, tracker, force=args.force)
+        print(f"  {gm['rows_out']:,} rows x {gm['n_features']} features")
+        for group, count in gm["feature_groups"].items():
+            print(f"    {group:<16}{count:>3}")
+        print("  class distribution:")
+        total = sum(gm["class_counts"].values())
+        for label, count in gm["class_counts"].items():
+            print(f"    {label:<12}{count:>9,}  ({count / total * 100:5.2f}%)")
 
     lineage_path = tracker.write(cfg["paths"]["lineage"])
 
