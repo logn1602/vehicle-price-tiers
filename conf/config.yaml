@@ -194,6 +194,11 @@ model:
     C: 1.0
     solver: lbfgs
     max_iter: 500
+    # v1 applied class_weight='balanced' to DecisionTree and RandomForest only,
+    # leaving LogisticRegression, SVM and -- critically -- the reported XGBoost
+    # model unweighted. Applying it uniformly is the fix for that
+    # inconsistency; the ablation isolates what it is worth.
+    class_weight: balanced
   svm:
     # SVC(kernel='rbf') is between quadratic and cubic in sample count and does
     # not terminate in reasonable time on ~250k training rows. LinearSVC is the
@@ -204,6 +209,11 @@ model:
     v1_reconstruction: svc_rbf
     C: 1.0
     max_iter: 5000
+    class_weight: balanced
+    # LinearSVC has no predict_proba, which the AUC and average-precision
+    # metrics require. Calibrating costs an internal CV fit; 3 folds rather
+    # than 5 keeps that affordable on ~233k training rows.
+    calibration_cv: 3
 
 evaluation:
   # Declared primary metric. Accuracy is unusable on its own here: Premium is
@@ -220,6 +230,10 @@ evaluation:
   # v1 selected its model with 0.4*acc + 0.3*F1 + 0.3*AUC -- arbitrary weights,
   # no justification. Explicitly disabled.
   composite_score: false
+  # A feature correlating with the target above this would indicate target
+  # encoding or a price-derived column leaking into X. No legitimate feature
+  # here should come close: the strongest honest predictor is vehicle_age.
+  leakage_correlation_threshold: 0.95
 
 mlflow:
   tracking_uri: file:./mlruns

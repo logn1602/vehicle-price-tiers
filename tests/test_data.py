@@ -211,3 +211,107 @@ def test_first_lineage_stage_starts_from_the_full_file(cfg):
     if lineage is None:
         pytest.skip("run scripts/run_all.py first")
     assert lineage[0]["rows_in"] == cfg["data_contract"]["raw"]["rows"]
+
+
+# ---------------------------------------------------------------------------
+# end-to-end ingest on a synthetic file
+#
+# Exercises bronze -> silver -> gold without the 1.35 GB source, so the layer
+# machinery (chunking, Parquet round-trip, caching, partitioning, lineage) is
+# covered by the test suite rather than only by running the real pipeline.
+# ---------------------------------------------------------------------------
+def _synthetic_csv(path: Path, n: int = 120) -> None:
+    import numpy as np
+
+    from src.schema import RAW_COLUMNS
+
+    rng = np.random.default_rng(0)
+    frame = pd.DataFrame({col: ["x"] * n for col in RAW_COLUMNS})
+    frame["id"] = [str(1_000_000 + i) for i in range(n)]
+    frame["price"] = rng.integers(500, 90_000, n).astype(float)
+    frame["year"] = rng.integers(1995, 2022, n).astype(float)
+    frame["odometer"] = rng.integers(1_000, 300_000, n).astype(float)
+    frame["lat"] = rng.uniform(25, 48, n)
+    frame["long"] = rng.uniform(-124, -70, n)
+    frame["county"] = None
+    frame["state"] = rng.choice(["ca", "tx", "ny"], n)
+    frame["manufacturer"] = rng.choice(["ford", "bmw", "toyota"], n)
+    frame["condition"] = rng.choice(["good", "excellent", None], n)
+    frame["fuel"] = rng.choice(["gas", "diesel", "electric"], n)
+    frame["transmission"] = rng.choice(["automatic", "manual"], n)
+    frame["title_status"] = rng.choice(["clean", "salvage"], n)
+    frame["type"] = rng.choice(["sedan", "suv", "coupe"], n)
+
+    # Rows the quality gates must remove: a zero price and a null odometer.
+    frame.loc[0, "price"] = 0.0
+    frame.loc[1, "odometer"] = None
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    frame.to_csv(path, index=False)
+
+
+@pytest.fixture
+def synthetic_cfg(cfg, tmp_path) -> dict:
+    """Config pointed at a throwaway tree, with the data contract relaxed to
+    the synthetic file's shape. The contract machinery is tested separately in
+    test_contract_tolerance_is_applied_only_to_percentages."""
+    import copy
+
+    local = copy.deepcopy(dict(cfg))
+    local["paths"] = dict(local["paths"])
+    local["paths"]["raw"] = str(tmp_path / "raw" / "vehicles.csv")
+    for layer in ("bronze", "silver", "gold"):
+        local["paths"][layer] = str(tmp_path / layer)
+    local["paths"]["results"] = str(tmp_path / "results")
+    local["ingest"] = dict(local["ingest"])
+    local["ingest"]["chunk_size"] = 50
+    local["data_contract"] = copy.deepcopy(local["data_contract"])
+    local["data_contract"]["raw"] = {"columns": 26}
+    _synthetic_csv(Path(local["paths"]["raw"]))
+    return local
+
+
+def test_end_to_end_ingest_produces_all_three_layers(synthetic_cfg):
+    from src.config import Config
+    from src.ingest import build_gold, build_silver, ingest_bronze
+
+    local = Config(synthetic_cfg)
+    tracker = LineageTracker(local)
+
+    bronze = ingest_bronze(local, tracker)
+    assert bronze["stats"]["rows"] == 120
+    assert bronze["parquet_bytes"] > 0
+
+    silver = build_silver(local, tracker)
+    # The zero-price row and the null-odometer row must both be gone.
+    assert silver["rows_out"] == 118
+    assert silver["n_partitions"] >= 1
+
+    gold = build_gold(local, tracker)
+    assert gold["rows_out"] == 118
+    assert gold["n_features"] == sum(gold["feature_groups"].values())
+
+    stages = [r.stage for r in tracker.records]
+    assert stages[0] == "ingest_bronze"
+    assert "build_gold" in stages
+
+
+def test_ingest_is_idempotent_and_replays_lineage(synthetic_cfg):
+    """A cached run must produce the same lineage as the run that built it,
+    otherwise results/lineage.json depends on cache state rather than on data."""
+    from src.config import Config
+    from src.ingest import build_gold, build_silver, ingest_bronze
+
+    local = Config(synthetic_cfg)
+
+    first = LineageTracker(local)
+    ingest_bronze(local, first)
+    build_silver(local, first)
+    build_gold(local, first)
+
+    second = LineageTracker(local)
+    ingest_bronze(local, second)
+    build_silver(local, second)
+    build_gold(local, second)
+
+    assert first.as_list() == second.as_list()
