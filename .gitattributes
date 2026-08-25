@@ -1,0 +1,22 @@
+# Normalise line endings so the repository is byte-identical across platforms.
+# This matters for the reproducibility requirement: two runs must produce an
+# identical results/metrics.json, and a CRLF/LF difference would break that
+# comparison for anyone cloning on Linux or macOS.
+* text=auto eol=lf
+
+# Windows-only scripts keep CRLF.
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary — never touch.
+*.png binary
+*.jpg binary
+*.pdf binary
+*.parquet binary
+*.pkl binary
+*.joblib binary
+*.ubj binary
+
+# Notebooks: mark as text but suppress diff noise from output cells.
+*.ipynb text

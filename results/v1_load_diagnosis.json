@@ -1,0 +1,194 @@
+{
+  "source": "data\\raw\\vehicles.csv",
+  "size_bytes": 1447955215,
+  "chunk_size": 50000,
+  "physical_newlines": 426881,
+  "columns": [
+    "id",
+    "url",
+    "region",
+    "region_url",
+    "price",
+    "year",
+    "manufacturer",
+    "model",
+    "condition",
+    "cylinders",
+    "fuel",
+    "odometer",
+    "title_status",
+    "transmission",
+    "VIN",
+    "drive",
+    "size",
+    "type",
+    "paint_color",
+    "image_url",
+    "description",
+    "county",
+    "state",
+    "lat",
+    "long",
+    "posting_date"
+  ],
+  "reference_shape": [
+    426880,
+    26
+  ],
+  "embedded_newlines_present": false,
+  "facts": [
+    {
+      "fact": "rows",
+      "actual": 426880,
+      "expected": 426880,
+      "pass": true
+    },
+    {
+      "fact": "columns",
+      "actual": 26,
+      "expected": 26,
+      "pass": true
+    },
+    {
+      "fact": "county_null_pct",
+      "actual": 100.0,
+      "expected": 100.0,
+      "pass": true
+    },
+    {
+      "fact": "size_null_pct",
+      "actual": 71.77,
+      "expected": 71.6,
+      "pass": false
+    },
+    {
+      "fact": "cylinders_null_pct",
+      "actual": 41.62,
+      "expected": 41.5,
+      "pass": false
+    },
+    {
+      "fact": "condition_null_pct",
+      "actual": 40.79,
+      "expected": 40.5,
+      "pass": false
+    },
+    {
+      "fact": "VIN_null_pct",
+      "actual": 37.73,
+      "expected": 37.8,
+      "pass": true
+    },
+    {
+      "fact": "paint_color_null_pct",
+      "actual": 30.5,
+      "expected": 30.4,
+      "pass": false
+    },
+    {
+      "fact": "year_null",
+      "actual": 1205,
+      "expected": 1205,
+      "pass": true
+    },
+    {
+      "fact": "odometer_null",
+      "actual": 4400,
+      "expected": 4400,
+      "pass": true
+    },
+    {
+      "fact": "rows_after_year_odometer_dropna",
+      "actual": 421344,
+      "expected": 421344,
+      "pass": true
+    },
+    {
+      "fact": "price_eq_0",
+      "actual": 32895,
+      "expected": 30759,
+      "pass": false
+    },
+    {
+      "fact": "price_gt_100k",
+      "actual": 655,
+      "expected": 647,
+      "pass": false
+    },
+    {
+      "fact": "price_max",
+      "actual": 3736928711.0,
+      "expected": 3736928711.0,
+      "pass": true
+    },
+    {
+      "fact": "year_gt_2021",
+      "actual": 133,
+      "expected": 133,
+      "pass": true
+    },
+    {
+      "fact": "odometer_gt_500k",
+      "actual": 1386,
+      "expected": 1385,
+      "pass": false
+    }
+  ],
+  "facts_all_pass": false,
+  "duplicates": {
+    "duplicates_excluding_identity": 20,
+    "identity_columns_excluded": [
+      "id",
+      "url",
+      "image_url"
+    ],
+    "duplicate_ids": 0,
+    "note": "v1 ran df.duplicated() across all 26 columns including id/url/image_url, which returns 0 by construction because id is unique."
+  },
+  "v1_filter": {
+    "filter": "(price > 0) & (price <= 200000)",
+    "rows_in": 426880,
+    "rows_out": 393861,
+    "pct_dropped": 7.73,
+    "v1_reported_rows_out": 6067,
+    "ratio_vs_v1": 64.9
+  },
+  "misparse_hypotheses": [
+    {
+      "name": "quote_none",
+      "why": "quoting ignored, commas inside description explode the field count",
+      "kwargs": "{'quoting': 3, 'on_bad_lines': 'skip', 'usecols': [0]}",
+      "error": "ParserError: Error tokenizing data. C error: Buffer overflow caught - possible malformed input file.\n",
+      "matches_v1": false,
+      "duration_s": 1.3
+    },
+    {
+      "name": "skip_bad_lines",
+      "why": "old pandas error_bad_lines=False silently dropped malformed rows",
+      "kwargs": "{'on_bad_lines': 'skip', 'usecols': [0]}",
+      "rows": 426880,
+      "matches_v1": false,
+      "delta_vs_v1": 121735,
+      "duration_s": 12.7
+    },
+    {
+      "name": "python_engine_skip",
+      "why": "engine='python' parses quoting differently from the C engine",
+      "kwargs": "{'engine': 'python', 'on_bad_lines': 'skip', 'usecols': [0]}",
+      "rows": 426880,
+      "matches_v1": false,
+      "delta_vs_v1": 121735,
+      "duration_s": 22.6
+    },
+    {
+      "name": "escapechar_backslash",
+      "why": "backslash-escaped quotes in description mis-terminate fields",
+      "kwargs": "{'escapechar': '\\\\', 'on_bad_lines': 'skip', 'usecols': [0]}",
+      "rows": 426879,
+      "matches_v1": false,
+      "delta_vs_v1": 121734,
+      "duration_s": 55.9
+    }
+  ],
+  "misparse_root_cause_found": false
+}

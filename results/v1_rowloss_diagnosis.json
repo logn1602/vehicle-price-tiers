@@ -1,0 +1,63 @@
+{
+  "question_1_stats_denominator": {
+    "denominator_rows": 421344,
+    "checks": [
+      {
+        "fact": "size_null_pct",
+        "actual_post_dropna": 71.58,
+        "brief_expected": 71.6,
+        "pass": true
+      },
+      {
+        "fact": "cylinders_null_pct",
+        "actual_post_dropna": 41.48,
+        "brief_expected": 41.5,
+        "pass": true
+      },
+      {
+        "fact": "condition_null_pct",
+        "actual_post_dropna": 40.46,
+        "brief_expected": 40.5,
+        "pass": true
+      },
+      {
+        "fact": "VIN_null_pct",
+        "actual_post_dropna": 37.81,
+        "brief_expected": 37.8,
+        "pass": true
+      },
+      {
+        "fact": "paint_color_null_pct",
+        "actual_post_dropna": 30.4,
+        "brief_expected": 30.4,
+        "pass": true
+      },
+      {
+        "fact": "price_eq_0",
+        "actual_post_dropna": 30759,
+        "brief_expected": 30759,
+        "pass": true
+      },
+      {
+        "fact": "price_gt_100k",
+        "actual_post_dropna": 647,
+        "brief_expected": 647,
+        "pass": true
+      },
+      {
+        "fact": "odometer_gt_500k",
+        "actual_post_dropna": 1385,
+        "brief_expected": 1385,
+        "pass": true
+      }
+    ],
+    "all_pass": true
+  },
+  "question_2_row_collapse": {
+    "v1_reported_model_rows": 6067,
+    "dropna_all_26_columns": 0,
+    "dropna_excluding_county": 34785,
+    "dropna_excluding_county_then_price_filter": 32430,
+    "price_filter_then_dropna_excluding_county": 32430
+  }
+}
