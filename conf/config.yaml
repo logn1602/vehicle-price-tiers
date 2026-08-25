@@ -1,0 +1,230 @@
+# ---------------------------------------------------------------------------
+# Vehicle price-tier classification -- single source of configuration.
+#
+# Nothing in src/ hard-codes a threshold, path, seed, or hyperparameter.
+# Override any value from the CLI, e.g.:
+#     python scripts/run_all.py --set model.xgboost.max_depth=6
+# ---------------------------------------------------------------------------
+
+seed: 42
+
+paths:
+  raw: data/raw/vehicles.csv
+  bronze: data/bronze
+  silver: data/silver
+  gold: data/gold
+  results: results
+  figures: results/figures
+  artifacts: artifacts
+  metrics: results/metrics.json
+  lineage: results/lineage.json
+
+ingest:
+  # Rows per chunk. The raw CSV is ~1.35 GB and the `description` column is
+  # long free text; a full-frame load exhausts memory on an 8 GB machine.
+  # Measured, not guessed -- see results/v1_load_diagnosis.json.
+  chunk_size: 50000
+  compression: snappy
+  # Partitioning silver by `state` keeps per-partition files in the 1-20 MB
+  # range (51 states, ~420k rows) and matches the most common EDA filter.
+  # Partitioning by `region` would give ~400 tiny files: worse for scan speed.
+  partition_on: state
+  # Columns dropped at bronze. `county` is 100% null; the free-text and URL
+  # columns are unused by the model and dominate memory.
+  drop_columns: [county]
+  text_columns: [description, url, image_url, VIN]
+
+# ---------------------------------------------------------------------------
+# Known facts about the raw file, asserted at load time.
+#
+# IMPORTANT -- these come in two flavours with DIFFERENT denominators, which
+# the project brief conflated into one table. Verified in
+# results/v1_rowloss_diagnosis.json.
+# ---------------------------------------------------------------------------
+data_contract:
+  # Measured against the raw 426,880-row file.
+  raw:
+    rows: 426880
+    columns: 26
+    county_null_pct: 100.0
+    year_null: 1205
+    odometer_null: 4400
+    year_gt_2021: 133
+    price_max: 3736928711.0
+    duplicates_excluding_identity: 20
+    duplicate_ids: 0
+  # Measured AFTER dropping rows with null year or odometer.
+  post_dropna:
+    rows: 421344
+    size_null_pct: 71.6
+    cylinders_null_pct: 41.5
+    condition_null_pct: 40.5
+    VIN_null_pct: 37.8
+    paint_color_null_pct: 30.4
+    price_eq_0: 30759
+    price_gt_100k: 647
+    odometer_gt_500k: 1385
+  # Percentages are quoted rounded in the brief; counts must match exactly.
+  pct_tolerance: 0.1
+  identity_columns: [id, url, image_url]
+
+# ---------------------------------------------------------------------------
+# Quality gates -- declarative, evaluated by src/validate.py.
+# ---------------------------------------------------------------------------
+quality:
+  price:  {min: 0, max: 200000, min_inclusive: false}
+  year:   {min: 1900, max: 2022}
+  odometer: {min: 0, max: 500000}
+  unique: [id]
+
+lineage:
+  # Any stage dropping more than this fraction fails the run. This single rule
+  # is what would have caught the v1 defect immediately.
+  max_drop_pct: 25.0
+  # Stages permitted to exceed it, each with a stated reason.
+  whitelist:
+    - stage: drop_invalid_price
+      reason: >
+        30,759 listings are priced at 0 and a further 647 exceed $100k, up to a
+        $3.7bn outlier. Removing them is the point of the stage, and the drop
+        stays under the threshold on the real file (7.7%) -- whitelisted only
+        so a future data revision cannot silently fail the run here.
+
+# ---------------------------------------------------------------------------
+# Target definition
+# ---------------------------------------------------------------------------
+target:
+  source_column: price
+  name: price_tier
+  # Ordinal: Budget < Mid-Range < Premium < Luxury. Boundaries are conventional
+  # industry/financing thresholds, NOT learned from the distribution.
+  bins: [0, 8000, 20000, 40000, .inf]
+  labels: [Budget, Mid-Range, Premium, Luxury]
+  ordinal: true
+
+features:
+  # The dataset was scraped in 2021. Using the current calendar year would add
+  # a constant offset to every age-derived feature and silently drift the model
+  # every January.
+  current_year: 2021
+  # 133 rows have year > 2021, which yields a negative age. We clip at 0 rather
+  # than drop: those rows are otherwise valid listings, and dropping them would
+  # bias against new vehicles, which are concentrated in the Luxury tier -- the
+  # class already hardest to predict. Clipping also removes a division-by-zero
+  # in mileage_per_year = odometer / (vehicle_age + 1), which in v1 produced inf
+  # and was silently coerced to 0 downstream.
+  clip_negative_age: true
+
+# ---------------------------------------------------------------------------
+# Modelling
+# ---------------------------------------------------------------------------
+split:
+  test_size: 0.20
+  val_size: 0.20       # of the original, applied to the remaining 80%
+  stratify: true
+
+pipeline:
+  variance_threshold: 0.01
+  select_k_best: 25
+  imputer_strategy: median
+  # Applied to EVERY model, not just LogisticRegression. In v1 the RBF-kernel
+  # SVM trained on unscaled features and scored 0.554; the report attributed
+  # that to the algorithm rather than to the missing scaler.
+  scaler: robust
+
+model:
+  # v1's hyperparameters, kept verbatim so the ablation is apples-to-apples.
+  xgboost:
+    max_depth: 4
+    min_child_weight: 7
+    subsample: 0.7
+    colsample_bytree: 0.6
+    reg_alpha: 0.1
+    reg_lambda: 1.0
+    gamma: 0.5
+    learning_rate: 0.05
+    n_estimators: 500
+    early_stopping_rounds: 30
+    eval_metric: mlogloss
+  decision_tree:
+    max_depth: 10
+    min_samples_split: 20
+    min_samples_leaf: 10
+    class_weight: balanced
+  random_forest:
+    n_estimators: 100
+    max_depth: 10
+    min_samples_split: 20
+    min_samples_leaf: 10
+    max_features: sqrt
+    class_weight: balanced
+    n_jobs: -1
+  logistic_regression:
+    penalty: l2
+    C: 1.0
+    solver: lbfgs
+    max_iter: 500
+  svm:
+    # SVC(kernel='rbf') is between quadratic and cubic in sample count and does
+    # not terminate in reasonable time on ~250k training rows. LinearSVC is the
+    # full-data substitute; the exact SVC is used only in the v1 reconstruction,
+    # where n=6,067 makes it cheap. This substitution is stated in the results
+    # table rather than hidden.
+    full_data: linear_svc
+    v1_reconstruction: svc_rbf
+    C: 1.0
+    max_iter: 5000
+
+evaluation:
+  # Declared primary metric. Accuracy is unusable on its own here: Premium is
+  # ~43% of the data, so a constant predictor scores 0.43. Macro F1 weights all
+  # four tiers equally, which makes Luxury (6.6% of rows) count as much as
+  # Premium -- exactly the failure mode v1 hid. QWK breaks ties because it
+  # additionally penalises distant errors more than adjacent ones, which is the
+  # property that makes this an ordinal problem rather than a nominal one.
+  primary_metric: macro_f1
+  tie_breaker: quadratic_weighted_kappa
+  cv_folds: 5
+  bootstrap_iterations: 1000
+  bootstrap_ci: 0.95
+  # v1 selected its model with 0.4*acc + 0.3*F1 + 0.3*AUC -- arbitrary weights,
+  # no justification. Explicitly disabled.
+  composite_score: false
+
+mlflow:
+  tracking_uri: file:./mlruns
+  experiment_name: vehicle-price-tiers
+  registered_model_name: vehicle-price-tier-classifier
+
+v1_reconstruction:
+  # v1 reported loading 305,145 rows and modelling 6,067 of them. No parse
+  # configuration reproduces either number from the correct file, which has
+  # zero malformed lines -- so v1 read a different file, one whose `price`
+  # column was ~98% unusable. See results/v1_load_diagnosis.json.
+  #
+  # We therefore RECONSTRUCT rather than reproduce: a stratified sample at
+  # v1's exact reported class proportions. Labelled as such everywhere.
+  enabled: true
+  n_rows: 6067
+  class_counts:
+    Premium: 2585
+    Mid-Range: 1791
+    Budget: 1295
+    Luxury: 396
+  reported_metrics:
+    test_accuracy: 0.736
+    auc_ovr_weighted: 0.909
+    weighted_f1: 0.724
+    overfitting_gap: 0.102
+    cv_accuracy_mean: 0.725
+    cv_accuracy_std: 0.011
+    luxury_precision: 0.533
+    luxury_recall: 0.203
+    luxury_f1: 0.294
+    svm_test_accuracy: 0.554
+    # Confusion-matrix row for true Luxury, in the LabelEncoder's alphabetical
+    # class order: [Budget, Luxury, Mid-Range, Premium]. Decoding this order is
+    # what reconciles the row with the reported recall of 0.203 (16/79) and
+    # shows 58 of 79 Luxury vehicles were predicted Premium.
+    confusion_luxury_row: [1, 16, 4, 58]
+    confusion_class_order: [Budget, Luxury, Mid-Range, Premium]

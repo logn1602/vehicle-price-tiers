@@ -1,0 +1,54 @@
+[
+  {
+    "stage": "ingest_bronze",
+    "rows_in": 426880,
+    "rows_out": 426880,
+    "rows_dropped": 0,
+    "pct_dropped": 0.0,
+    "reason": "typed copy of source; no rows filtered",
+    "duration_s": 0.001,
+    "timestamp": "2026-08-25T01:53:29+00:00",
+    "whitelisted": false,
+    "extra": {
+      "csv_mb": 1448.0,
+      "parquet_mb": 457.6,
+      "compression_ratio": 3.16
+    }
+  },
+  {
+    "stage": "drop_null_year_odometer",
+    "rows_in": 426880,
+    "rows_out": 421344,
+    "rows_dropped": 5536,
+    "pct_dropped": 1.2969,
+    "reason": "year and odometer are the two strongest predictors; a listing missing either cannot be aged or mileage-scored, and imputing them would fabricate the signal the model is meant to learn",
+    "duration_s": 0.206,
+    "timestamp": "2026-08-25T01:53:31+00:00",
+    "whitelisted": false,
+    "extra": {}
+  },
+  {
+    "stage": "drop_invalid_price",
+    "rows_in": 421344,
+    "rows_out": 390461,
+    "rows_dropped": 30883,
+    "pct_dropped": 7.3296,
+    "reason": "price must be in (0, 200000]; the source contains 30,759 zero-price listings and a $3.7bn outlier",
+    "duration_s": 0.153,
+    "timestamp": "2026-08-25T01:53:31+00:00",
+    "whitelisted": true,
+    "extra": {}
+  },
+  {
+    "stage": "apply_quality_gates",
+    "rows_in": 390461,
+    "rows_out": 389242,
+    "rows_dropped": 1219,
+    "pct_dropped": 0.3122,
+    "reason": "year in [1900, 2022], odometer in [0, 500000]",
+    "duration_s": 0.169,
+    "timestamp": "2026-08-25T01:53:31+00:00",
+    "whitelisted": false,
+    "extra": {}
+  }
+]

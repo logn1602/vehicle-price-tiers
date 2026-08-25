@@ -71,9 +71,7 @@ select = [
     "RET",    # return consistency
     "ARG",    # unused arguments
 ]
-ignore = [
-    "PD901",  # `df` is a fine name for a dataframe in this codebase
-]
+ignore = []
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["ARG"]            # pytest fixtures are legitimately unused args
