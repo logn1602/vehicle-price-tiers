@@ -64,6 +64,13 @@ artifacts/
 *.ubj
 
 # ---------------------------------------------------------------------------
+# Scratch comparison artifacts from the reproducibility check. The published
+# results/metrics.json is committed; intermediate copies of it are not.
+# ---------------------------------------------------------------------------
+results/_*.json
+results/_*.txt
+
+# ---------------------------------------------------------------------------
 # OS
 # ---------------------------------------------------------------------------
 .DS_Store

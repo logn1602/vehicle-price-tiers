@@ -35,7 +35,7 @@ from sklearn.metrics import (
     recall_score,
     roc_auc_score,
 )
-from sklearn.model_selection import StratifiedKFold, cross_val_score
+from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import label_binarize
 
 
@@ -245,7 +245,7 @@ _METRIC_FUNCTIONS = {
 
 
 def cross_validate_pipeline(
-    pipe, X_train: pd.DataFrame, y_train: np.ndarray, cfg: dict
+    pipe, X_train: pd.DataFrame, y_train: np.ndarray, cfg: dict, weighted: bool = True
 ) -> dict:
     """Stratified k-fold CV with the ENTIRE pipeline inside each fold.
 
@@ -256,34 +256,67 @@ def cross_validate_pipeline(
     filtering, selection and scaling are all refitted per fold.
     """
     from sklearn.base import clone
+    from sklearn.utils.class_weight import compute_sample_weight
 
     folds = cfg["evaluation"]["cv_folds"]
     metric = cfg["evaluation"]["primary_metric"]
     scoring = _CV_SCORING[metric]
+    scorer = _METRIC_FUNCTIONS[metric]
 
-    # cross_val_score clones the pipeline and refits it on each fold with no
-    # eval_set, which XGBoost rejects outright when early_stopping_rounds is
-    # set on the constructor. Disable it for CV only: a fold has no held-out
-    # slice to stop against, so CV necessarily measures the model trained to
-    # full n_estimators. Recorded below so the CV figure is never mistaken for
-    # a measurement of the early-stopped model.
-    cv_pipe = clone(pipe)
+    # Folds are iterated by hand rather than through cross_val_score, for two
+    # reasons that both change the number.
+    #
+    # First, cross_val_score refits the clone with no eval_set, which XGBoost
+    # rejects outright when early_stopping_rounds is set on the constructor. A
+    # fold has no held-out slice to stop against, so CV necessarily measures the
+    # model trained to full n_estimators.
+    #
+    # Second, and more subtly: fit_params passed to cross_val_score are handed
+    # to every fold unsliced, so sample_weight cannot be routed correctly. The
+    # earlier version simply omitted it, which meant CV silently measured an
+    # UNWEIGHTED model while the reported test metric came from a weighted one
+    # -- two different estimators presented side by side. Weights are now
+    # recomputed per fold from that fold's training labels.
+    template = clone(pipe)
+    estimator = template.steps[-1][1]
     early_stopping_disabled = False
-    estimator = cv_pipe.steps[-1][1]
     if getattr(estimator, "early_stopping_rounds", None) is not None:
         estimator.set_params(early_stopping_rounds=None)
         early_stopping_disabled = True
 
+    # `weighted` must mirror what `src.pipeline.fit` actually does, which is
+    # narrower than "balance everything": only XGBoost receives sample_weight,
+    # because the other four carry class_weight='balanced' on the estimator
+    # itself. Passing sample_weight to those as well applies the correction
+    # twice -- an earlier version of this function did exactly that and drove
+    # the decision tree's CV score 0.08 below its test score.
     cv = StratifiedKFold(n_splits=folds, shuffle=True, random_state=cfg["seed"])
-    scores = cross_val_score(cv_pipe, X_train, y_train, cv=cv, scoring=scoring, n_jobs=1)
+    scores: list[float] = []
+    for train_idx, test_idx in cv.split(X_train, y_train):
+        fold_pipe = clone(template)
+        X_fit, X_score = X_train.iloc[train_idx], X_train.iloc[test_idx]
+        y_fit, y_score = y_train[train_idx], y_train[test_idx]
+
+        if weighted:
+            fold_pipe.fit(
+                X_fit, y_fit,
+                clf__sample_weight=compute_sample_weight("balanced", y_fit),
+            )
+        else:
+            fold_pipe.fit(X_fit, y_fit)
+
+        scores.append(float(scorer(y_score, fold_pipe.predict(X_score))))
+
+    array = np.asarray(scores)
     return {
         "metric": metric,
         "scoring": scoring,
         "folds": folds,
-        "scores": [float(s) for s in scores],
-        "mean": float(scores.mean()),
-        "std": float(scores.std()),
+        "scores": scores,
+        "mean": float(array.mean()),
+        "std": float(array.std()),
         "early_stopping_disabled_for_cv": early_stopping_disabled,
+        "sample_weighted": bool(weighted),
     }
 
 
@@ -307,8 +340,13 @@ def evaluate_model(
     labels: list[str],
     cfg: dict,
     include_cv: bool = True,
+    weighted: bool = True,
 ) -> dict[str, Any]:
-    """Every metric for one fitted model."""
+    """Every metric for one fitted model.
+
+    `weighted` must match how the model was actually fitted, so that the CV
+    figure measures the same estimator as the test figure.
+    """
     y_pred_train = pipe.predict(X_train)
     y_pred_test = pipe.predict(X_test)
 
@@ -350,7 +388,17 @@ def evaluate_model(
     )
 
     if include_cv:
-        result["cross_validation"] = cross_validate_pipeline(pipe, X_train, y_train, cfg)
+        # Only models that receive sample_weight in src.pipeline.fit get it
+        # here. Everything else is balanced via class_weight on the estimator.
+        from src.pipeline import EARLY_STOPPING_MODELS
+
+        result["cross_validation"] = cross_validate_pipeline(
+            pipe,
+            X_train,
+            y_train,
+            cfg,
+            weighted=weighted and name in EARLY_STOPPING_MODELS,
+        )
 
     return result
 

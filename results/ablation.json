@@ -1,0 +1,249 @@
+{
+  "note": "Row 1 is a reconstruction at v1's reported class proportions, not a reproduction: v1's source file no longer exists and no parse of the correct CSV recreates it. See results/v1_load_diagnosis.json.",
+  "subsampled_to": null,
+  "baseline": {
+    "predicted_class": "Mid-Range",
+    "accuracy": 0.33266708114746096,
+    "macro_f1": 0.12481252289244886
+  },
+  "tracked_models": [
+    "xgboost",
+    "svm"
+  ],
+  "configurations": [
+    {
+      "configuration": "v1 as-built",
+      "changed": "baseline: 6,067-row reconstruction, leaky, unscaled, unweighted",
+      "rows": 6067,
+      "n_train": 3639,
+      "n_test": 1214,
+      "flags": {
+        "leaky": true,
+        "scale_all": false,
+        "balanced": false,
+        "early_stopping": false
+      },
+      "models": {
+        "xgboost": {
+          "accuracy": 0.6548599670510709,
+          "macro_f1": 0.5817781073386503,
+          "weighted_f1": 0.6458368688498503,
+          "luxury_recall": 0.27848101265822783,
+          "luxury_precision": 0.5789473684210527,
+          "luxury_support": 79,
+          "adjacent_accuracy": 0.9752883031301482,
+          "quadratic_weighted_kappa": 0.7129532016944009,
+          "linear_weighted_kappa": 0.599163939586948,
+          "tier_mae": 0.371499176276771
+        },
+        "svm": {
+          "accuracy": 0.586490939044481,
+          "macro_f1": 0.42819256939101324,
+          "weighted_f1": 0.5499353936829762,
+          "luxury_recall": 0.0,
+          "luxury_precision": 0.0,
+          "luxury_support": 79,
+          "adjacent_accuracy": 0.9497528830313015,
+          "quadratic_weighted_kappa": 0.5995015684381975,
+          "linear_weighted_kappa": 0.4831610095421196,
+          "tier_mae": 0.46622734761120266
+        }
+      }
+    },
+    {
+      "configuration": "+ correct data load",
+      "changed": "426,880 rows instead of a 6,067-row subset",
+      "rows": 389242,
+      "n_train": 233544,
+      "n_test": 77849,
+      "flags": {
+        "leaky": true,
+        "scale_all": false,
+        "balanced": false,
+        "early_stopping": false
+      },
+      "models": {
+        "xgboost": {
+          "accuracy": 0.6730850749527932,
+          "macro_f1": 0.6425407730826167,
+          "weighted_f1": 0.6713050077254754,
+          "luxury_recall": 0.41224635101459595,
+          "luxury_precision": 0.6744321490972627,
+          "luxury_support": 5618,
+          "adjacent_accuracy": 0.9701987180310602,
+          "quadratic_weighted_kappa": 0.7326370286968484,
+          "linear_weighted_kappa": 0.6343910601374899,
+          "tier_mae": 0.3600431604773343
+        },
+        "svm": {
+          "accuracy": 0.558452902413647,
+          "macro_f1": 0.43607551691314006,
+          "weighted_f1": 0.5361221088596627,
+          "luxury_recall": 0.0,
+          "luxury_precision": 0.0,
+          "luxury_support": 5618,
+          "adjacent_accuracy": 0.9371475548818867,
+          "quadratic_weighted_kappa": 0.5796889399357196,
+          "linear_weighted_kappa": 0.46931964142123217,
+          "tier_mae": 0.5059024521830724
+        }
+      }
+    },
+    {
+      "configuration": "+ leakage removed",
+      "changed": "impute/variance/select fitted inside the pipeline, train only",
+      "rows": 389242,
+      "n_train": 233544,
+      "n_test": 77849,
+      "flags": {
+        "leaky": false,
+        "scale_all": false,
+        "balanced": false,
+        "early_stopping": false
+      },
+      "models": {
+        "xgboost": {
+          "accuracy": 0.6730850749527932,
+          "macro_f1": 0.6425407730826167,
+          "weighted_f1": 0.6713050077254754,
+          "luxury_recall": 0.41224635101459595,
+          "luxury_precision": 0.6744321490972627,
+          "luxury_support": 5618,
+          "adjacent_accuracy": 0.9701987180310602,
+          "quadratic_weighted_kappa": 0.7326370286968484,
+          "linear_weighted_kappa": 0.6343910601374899,
+          "tier_mae": 0.3600431604773343
+        },
+        "svm": {
+          "accuracy": 0.558452902413647,
+          "macro_f1": 0.43607551691314006,
+          "weighted_f1": 0.5361221088596627,
+          "luxury_recall": 0.0,
+          "luxury_precision": 0.0,
+          "luxury_support": 5618,
+          "adjacent_accuracy": 0.9371475548818867,
+          "quadratic_weighted_kappa": 0.5796889399357196,
+          "linear_weighted_kappa": 0.46931964142123217,
+          "tier_mae": 0.5059024521830724
+        }
+      }
+    },
+    {
+      "configuration": "+ scaling for all models",
+      "changed": "RobustScaler applied to every model, not just LogisticRegression",
+      "rows": 389242,
+      "n_train": 233544,
+      "n_test": 77849,
+      "flags": {
+        "leaky": false,
+        "scale_all": true,
+        "balanced": false,
+        "early_stopping": false
+      },
+      "models": {
+        "xgboost": {
+          "accuracy": 0.6730850749527932,
+          "macro_f1": 0.6425407730826167,
+          "weighted_f1": 0.6713050077254754,
+          "luxury_recall": 0.41224635101459595,
+          "luxury_precision": 0.6744321490972627,
+          "luxury_support": 5618,
+          "adjacent_accuracy": 0.9701987180310602,
+          "quadratic_weighted_kappa": 0.7326370286968484,
+          "linear_weighted_kappa": 0.6343910601374899,
+          "tier_mae": 0.3600431604773343
+        },
+        "svm": {
+          "accuracy": 0.6201235725571298,
+          "macro_f1": 0.5870439926044545,
+          "weighted_f1": 0.6182121799168594,
+          "luxury_recall": 0.35065859736561056,
+          "luxury_precision": 0.6100960049550944,
+          "luxury_support": 5618,
+          "adjacent_accuracy": 0.958175442202212,
+          "quadratic_weighted_kappa": 0.6730654682809827,
+          "linear_weighted_kappa": 0.5659761855170247,
+          "tier_mae": 0.42614548677568115
+        }
+      }
+    },
+    {
+      "configuration": "+ balanced sample weights",
+      "changed": "compute_sample_weight('balanced') on the XGBoost fit",
+      "rows": 389242,
+      "n_train": 233544,
+      "n_test": 77849,
+      "flags": {
+        "leaky": false,
+        "scale_all": true,
+        "balanced": true,
+        "early_stopping": false
+      },
+      "models": {
+        "xgboost": {
+          "accuracy": 0.6450693008259579,
+          "macro_f1": 0.6270876525354848,
+          "weighted_f1": 0.6494799295388572,
+          "luxury_recall": 0.7899608401566394,
+          "luxury_precision": 0.39090989165859247,
+          "luxury_support": 5618,
+          "adjacent_accuracy": 0.9570707395085357,
+          "quadratic_weighted_kappa": 0.7182245100681683,
+          "linear_weighted_kappa": 0.6213435157081904,
+          "tier_mae": 0.4093565749078344
+        },
+        "svm": {
+          "accuracy": 0.6195198396896556,
+          "macro_f1": 0.5871293468785981,
+          "weighted_f1": 0.6177997828709996,
+          "luxury_recall": 0.35315058739765043,
+          "luxury_precision": 0.6108374384236454,
+          "luxury_support": 5618,
+          "adjacent_accuracy": 0.9581369060617348,
+          "quadratic_weighted_kappa": 0.6714578830494626,
+          "linear_weighted_kappa": 0.5647339428859404,
+          "tier_mae": 0.4270189726264949
+        }
+      }
+    },
+    {
+      "configuration": "+ early stopping on val",
+      "changed": "validation set drives early stopping instead of being discarded",
+      "rows": 389242,
+      "n_train": 233544,
+      "n_test": 77849,
+      "flags": {
+        "leaky": false,
+        "scale_all": true,
+        "balanced": true,
+        "early_stopping": true
+      },
+      "models": {
+        "xgboost": {
+          "accuracy": 0.6450693008259579,
+          "macro_f1": 0.6270876525354848,
+          "weighted_f1": 0.6494799295388572,
+          "luxury_recall": 0.7899608401566394,
+          "luxury_precision": 0.39090989165859247,
+          "luxury_support": 5618,
+          "adjacent_accuracy": 0.9570707395085357,
+          "quadratic_weighted_kappa": 0.7182245100681683,
+          "linear_weighted_kappa": 0.6213435157081904,
+          "tier_mae": 0.4093565749078344
+        },
+        "svm": {
+          "accuracy": 0.6195198396896556,
+          "macro_f1": 0.5871293468785981,
+          "weighted_f1": 0.6177997828709996,
+          "luxury_recall": 0.35315058739765043,
+          "luxury_precision": 0.6108374384236454,
+          "luxury_support": 5618,
+          "adjacent_accuracy": 0.9581369060617348,
+          "quadratic_weighted_kappa": 0.6714578830494626,
+          "linear_weighted_kappa": 0.5647339428859404,
+          "tier_mae": 0.4270189726264949
+        }
+      }
+    }
+  ]
+}

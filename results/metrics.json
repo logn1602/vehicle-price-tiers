@@ -1,9 +1,10 @@
 {
   "run_metadata": {
-    "timestamp": "2026-08-25T03:21:43+00:00",
-    "duration_s": 27.1,
+    "timestamp": "2026-08-26T01:26:44+00:00",
+    "duration_s": 14.5,
     "fit_seconds": {
-      "xgboost": 2.6
+      "xgboost": 5.0,
+      "xgboost_ordinal": 1.83
     },
     "python": "3.11.9",
     "platform": "Windows-10-10.0.26200-SP0",
@@ -20,9 +21,9 @@
     "config_hash": "89ad329b3e5ded95bde8d0c43c91e4f7d362075fb86feee1e2ac02b7c7967867",
     "data_hash": "d92576679edd0525c1624a78db598370f69b1ed243e3536b4a57ef9c1be60712",
     "seed": 42,
-    "n_rows": 6000,
+    "n_rows": 30000,
     "n_features_in": 49,
-    "subsampled_to": 6000
+    "subsampled_to": 30000
   },
   "selection": {
     "primary_metric": "macro_f1",
@@ -37,78 +38,78 @@
     "Luxury"
   ],
   "split": {
-    "train": 3600,
-    "val": 1200,
-    "test": 1200
+    "train": 18000,
+    "val": 6000,
+    "test": 6000
   },
   "baseline": {
     "strategy": "most_frequent",
     "predicted_class": "Mid-Range",
-    "accuracy": 0.3325,
-    "macro_f1": 0.124765478424015,
-    "weighted_f1": 0.16593808630393997,
+    "accuracy": 0.33266666666666667,
+    "macro_f1": 0.12481240620310155,
+    "weighted_f1": 0.16608370852092713,
     "quadratic_weighted_kappa": 0.0,
-    "adjacent_accuracy": 0.9275,
-    "tier_mae": 0.74,
+    "adjacent_accuracy": 0.9278333333333333,
+    "tier_mae": 0.7395,
     "train_class_distribution": {
-      "Budget": 1049,
-      "Mid-Range": 1198,
-      "Premium": 1093,
-      "Luxury": 260
+      "Budget": 5248,
+      "Mid-Range": 5988,
+      "Premium": 5465,
+      "Luxury": 1299
     }
   },
   "models": [
     {
       "model": "xgboost",
-      "accuracy": 0.6266666666666667,
-      "train_accuracy": 0.7194444444444444,
-      "overfitting_gap": 0.09277777777777774,
-      "macro_precision": 0.5907890488190662,
-      "macro_recall": 0.6213213404864947,
-      "macro_f1": 0.6005875022394573,
-      "weighted_precision": 0.6345788785066151,
-      "weighted_recall": 0.6266666666666667,
-      "weighted_f1": 0.6282721702952301,
-      "n_train": 3600,
-      "n_test": 1200,
-      "auc_ovr_macro": 0.8695407423436112,
-      "auc_ovr_weighted": 0.8552033762880594,
-      "average_precision_macro": 0.6647595011546689,
-      "average_precision_weighted": 0.7045564621510334,
+      "accuracy": 0.6423333333333333,
+      "train_accuracy": 0.667,
+      "overfitting_gap": 0.024666666666666726,
+      "macro_precision": 0.6112339703428734,
+      "macro_recall": 0.6632153619969204,
+      "macro_f1": 0.6227522971380037,
+      "weighted_precision": 0.6606587657679528,
+      "weighted_recall": 0.6423333333333333,
+      "weighted_f1": 0.6463367732162673,
+      "n_train": 18000,
+      "n_test": 6000,
+      "auc_ovr_macro": 0.8806191199850019,
+      "auc_ovr_weighted": 0.8661481415706757,
+      "average_precision_macro": 0.6993624461498449,
+      "average_precision_weighted": 0.7246229721133924,
       "ordinal": {
-        "quadratic_weighted_kappa": 0.7094982242054457,
-        "linear_weighted_kappa": 0.5989855761610398,
-        "adjacent_accuracy": 0.9583333333333334,
-        "tier_mae": 0.4216666666666667
+        "quadratic_weighted_kappa": 0.7181295954268698,
+        "linear_weighted_kappa": 0.6178062065913403,
+        "adjacent_accuracy": 0.9566666666666667,
+        "tier_mae": 0.4105
       },
       "per_class": [
         {
           "class": "Budget",
-          "precision": 0.7131147540983607,
-          "recall": 0.7457142857142857,
-          "f1": 0.729050279329609,
-          "support": 350
+          "precision": 0.7392316647264261,
+          "recall": 0.7261292166952544,
+          "f1": 0.7326218632823767,
+          "support": 1749
         },
         {
           "class": "Mid-Range",
-          "precision": 0.5943152454780362,
-          "recall": 0.5764411027568922,
-          "f1": 0.5852417302798982,
-          "support": 399
+          "precision": 0.6225026288117771,
+          "recall": 0.593186372745491,
+          "f1": 0.6074910210364289,
+          "support": 1996
         },
         {
           "class": "Premium",
-          "precision": 0.660377358490566,
-          "recall": 0.5769230769230769,
-          "f1": 0.6158357771260997,
-          "support": 364
+          "precision": 0.6907810499359796,
+          "recall": 0.5922063666300769,
+          "f1": 0.6377068557919622,
+          "support": 1822
         },
         {
           "class": "Luxury",
-          "precision": 0.3953488372093023,
-          "recall": 0.5862068965517241,
-          "f1": 0.4722222222222222,
-          "support": 87
+          "precision": 0.3924205378973105,
+          "recall": 0.7413394919168591,
+          "f1": 0.513189448441247,
+          "support": 433
         }
       ],
       "confusion": {
@@ -120,79 +121,64 @@
         ],
         "counts": [
           [
-            261,
-            71,
-            12,
-            6
+            1270,
+            367,
+            62,
+            50
           ],
           [
-            90,
-            230,
-            67,
-            12
+            398,
+            1184,
+            332,
+            82
           ],
           [
-            13,
-            81,
-            210,
-            60
+            43,
+            335,
+            1079,
+            365
           ],
           [
-            2,
-            5,
-            29,
-            51
+            7,
+            16,
+            89,
+            321
           ]
         ],
         "row_normalised": [
           [
-            0.7457,
-            0.2029,
-            0.0343,
-            0.0171
+            0.7261,
+            0.2098,
+            0.0354,
+            0.0286
           ],
           [
-            0.2256,
-            0.5764,
-            0.1679,
-            0.0301
+            0.1994,
+            0.5932,
+            0.1663,
+            0.0411
           ],
           [
-            0.0357,
-            0.2225,
-            0.5769,
-            0.1648
+            0.0236,
+            0.1839,
+            0.5922,
+            0.2003
           ],
           [
-            0.023,
-            0.0575,
-            0.3333,
-            0.5862
+            0.0162,
+            0.037,
+            0.2055,
+            0.7413
           ]
         ]
       },
       "bootstrap": {
         "metric": "macro_f1",
-        "point_estimate": 0.6005875022394573,
-        "ci_lower": 0.568679868125987,
-        "ci_upper": 0.630299489379985,
+        "point_estimate": 0.6227522971380037,
+        "ci_lower": 0.6090421903130931,
+        "ci_upper": 0.6363290449073266,
         "level": 0.95,
         "iterations": 1000
-      },
-      "cross_validation": {
-        "metric": "macro_f1",
-        "scoring": "f1_macro",
-        "folds": 5,
-        "scores": [
-          0.5715729017816993,
-          0.6047894078824178,
-          0.6144787649411114,
-          0.5824565928194663,
-          0.5990624919933734
-        ],
-        "mean": 0.5944720318836136,
-        "std": 0.015469524068196848,
-        "early_stopping_disabled_for_cv": true
       },
       "selected_features": [
         "vehicle_age",
@@ -208,11 +194,11 @@
         "low_mileage",
         "high_mileage",
         "very_high_mileage",
+        "low_mileage_for_age",
         "mileage_age_interaction",
         "is_reliable",
         "is_utility_type",
         "is_economy_type",
-        "is_excellent_condition",
         "needs_work",
         "is_diesel",
         "is_gas",
@@ -222,9 +208,158 @@
         "condition_age_interaction"
       ],
       "n_selected_features": 25,
-      "best_iteration": 401,
-      "early_stopped": true,
-      "mlflow_run_id": "bb117c396d5d45d69685ce4f35ec3d52"
+      "best_iteration": 491,
+      "early_stopped": true
+    },
+    {
+      "model": "xgboost_ordinal",
+      "accuracy": 0.6406666666666667,
+      "train_accuracy": 0.6548888888888889,
+      "overfitting_gap": 0.014222222222222136,
+      "macro_precision": 0.6076650918076146,
+      "macro_recall": 0.6597926224015104,
+      "macro_f1": 0.6199003609198313,
+      "weighted_precision": 0.6577496921416903,
+      "weighted_recall": 0.6406666666666667,
+      "weighted_f1": 0.6443734725017908,
+      "n_train": 18000,
+      "n_test": 6000,
+      "auc_ovr_macro": 0.8785539668064749,
+      "auc_ovr_weighted": 0.8640337271396151,
+      "average_precision_macro": 0.6943152416097119,
+      "average_precision_weighted": 0.7196075761144216,
+      "ordinal": {
+        "quadratic_weighted_kappa": 0.7156101658501476,
+        "linear_weighted_kappa": 0.6160955187745732,
+        "adjacent_accuracy": 0.9556666666666667,
+        "tier_mae": 0.41383333333333333
+      },
+      "per_class": [
+        {
+          "class": "Budget",
+          "precision": 0.7305491990846682,
+          "recall": 0.7301315037164093,
+          "f1": 0.7303402916785816,
+          "support": 1749
+        },
+        {
+          "class": "Mid-Range",
+          "precision": 0.6283821093318609,
+          "recall": 0.5701402805611222,
+          "f1": 0.597846073023378,
+          "support": 1996
+        },
+        {
+          "class": "Premium",
+          "precision": 0.6842751842751843,
+          "recall": 0.6114160263446762,
+          "f1": 0.6457971014492754,
+          "support": 1822
+        },
+        {
+          "class": "Luxury",
+          "precision": 0.3874538745387454,
+          "recall": 0.7274826789838337,
+          "f1": 0.5056179775280899,
+          "support": 433
+        }
+      ],
+      "confusion": {
+        "labels": [
+          "Budget",
+          "Mid-Range",
+          "Premium",
+          "Luxury"
+        ],
+        "counts": [
+          [
+            1277,
+            356,
+            63,
+            53
+          ],
+          [
+            419,
+            1138,
+            357,
+            82
+          ],
+          [
+            44,
+            301,
+            1114,
+            363
+          ],
+          [
+            8,
+            16,
+            94,
+            315
+          ]
+        ],
+        "row_normalised": [
+          [
+            0.7301,
+            0.2035,
+            0.036,
+            0.0303
+          ],
+          [
+            0.2099,
+            0.5701,
+            0.1789,
+            0.0411
+          ],
+          [
+            0.0241,
+            0.1652,
+            0.6114,
+            0.1992
+          ],
+          [
+            0.0185,
+            0.037,
+            0.2171,
+            0.7275
+          ]
+        ]
+      },
+      "bootstrap": {
+        "metric": "macro_f1",
+        "point_estimate": 0.6199003609198313,
+        "ci_lower": 0.6065898153348053,
+        "ci_upper": 0.6329410280848431,
+        "level": 0.95,
+        "iterations": 1000
+      },
+      "selected_features": [
+        "vehicle_age",
+        "is_new",
+        "is_old",
+        "age_category_numeric",
+        "decade",
+        "is_2010s",
+        "is_2000s",
+        "log_odometer",
+        "sqrt_odometer",
+        "mileage_category_numeric",
+        "low_mileage",
+        "high_mileage",
+        "very_high_mileage",
+        "low_mileage_for_age",
+        "mileage_age_interaction",
+        "is_reliable",
+        "is_utility_type",
+        "is_economy_type",
+        "needs_work",
+        "is_diesel",
+        "is_gas",
+        "is_premium_fuel",
+        "is_automatic",
+        "is_other_transmission",
+        "condition_age_interaction"
+      ],
+      "n_selected_features": 25
     }
   ]
 }

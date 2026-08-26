@@ -114,6 +114,20 @@ def reconstruct_v1_sample(
     return X.loc[idx], y.loc[idx]
 
 
+def set_class_weight(estimator, value: str | None) -> None:
+    """Turn estimator-level class balancing on or off, wherever it lives.
+
+    Without this every ablation row carried class_weight='balanced' from
+    conf/config.yaml, including the row that is meant to represent v1 as-built.
+    That made the balancing row a no-op for every model except XGBoost and
+    quietly overstated the first row.
+    """
+    params = estimator.get_params()
+    for key in ("class_weight", "estimator__class_weight"):
+        if key in params:
+            estimator.set_params(**{key: value})
+
+
 def leaky_transform(
     X: pd.DataFrame, y: np.ndarray, cfg: dict
 ) -> pd.DataFrame:
@@ -167,6 +181,7 @@ def evaluate_configuration(
             estimator = build_estimator(
                 name, cfg, n_classes=len(labels), for_v1=(conf.rows == "v1")
             )
+            set_class_weight(estimator, "balanced" if conf.balanced else None)
             if conf.scale_all or name == "logistic_regression":
                 scaler = RobustScaler().fit(X_train)
                 Xtr, Xte = scaler.transform(X_train), scaler.transform(X_test)
@@ -188,6 +203,7 @@ def evaluate_configuration(
             pipe = build_pipeline(
                 name, cfg, n_classes=len(labels), for_v1=(conf.rows == "v1")
             )
+            set_class_weight(pipe.named_steps["clf"], "balanced" if conf.balanced else None)
             if not conf.scale_all and name != "logistic_regression":
                 pipe.set_params(scale="passthrough")
             if not conf.early_stopping and name == "xgboost":

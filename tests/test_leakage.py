@@ -261,10 +261,21 @@ def test_split_preserves_class_proportions(cfg, dataset, split):
         np.testing.assert_allclose(part, overall, atol=0.01, err_msg=f"{name} split")
 
 
-def test_validation_set_is_actually_used_by_xgboost(cfg, dataset, split):
+def test_validation_set_is_actually_consumed_by_xgboost(cfg, dataset, split):
     """v1 built X_val, scaled it, and never referenced it again because
-    early_stopping_rounds was commented out. Assert the opposite here: the
-    fitted booster must record an evaluation history and a best iteration."""
+    early_stopping_rounds was commented out.
+
+    What this asserts is that the validation set is *consumed*: the booster
+    records a per-iteration evaluation history against it and exposes a best
+    iteration. It deliberately does NOT assert that early stopping fires --
+    whether it does depends on the data and the estimator budget, and on the
+    full 389k-row dataset it does not (the booster is still improving at 500
+    rounds, which is a statement about the hyperparameters being inherited from
+    a 6,067-row experiment, not about the wiring being broken).
+
+    Asserting "stopped early" would make this test a hyperparameter check that
+    passes on a small fixture and misdescribes the production run.
+    """
     X_train, y_train = split["train"]
     X_val, y_val = split["val"]
 
@@ -272,11 +283,24 @@ def test_validation_set_is_actually_used_by_xgboost(cfg, dataset, split):
     fitted = fit(pipe, "xgboost", X_train, y_train, X_val, y_val)
     booster = fitted.named_steps["clf"]
 
-    assert booster.evals_result(), "no eval history -- validation set was ignored"
+    history = booster.evals_result()
+    assert history, "no eval history -- the validation set was ignored"
+
+    # One entry per boosting round means the val set was scored every iteration.
+    curve = next(iter(next(iter(history.values())).values()))
+    assert len(curve) > 1, "validation was scored once or not at all"
     assert booster.best_iteration is not None
-    assert booster.best_iteration < cfg["model"]["xgboost"]["n_estimators"], (
-        "early stopping never triggered; it ran to the full n_estimators"
-    )
+    assert 0 <= booster.best_iteration <= cfg["model"]["xgboost"]["n_estimators"]
+
+
+def test_fit_without_a_validation_set_still_works(cfg, split):
+    """The ablation fits XGBoost with early stopping disabled. That path must
+    not silently depend on an eval_set being present."""
+    X_train, y_train = split["train"]
+    pipe = build_pipeline("xgboost", cfg, n_classes=4)
+    pipe.named_steps["clf"].set_params(early_stopping_rounds=None)
+    fitted = fit(pipe, "xgboost", X_train, y_train, None, None)
+    assert fitted.predict(X_train.head(5)).shape == (5,)
 
 
 def test_eval_set_is_transformed_not_raw(cfg, dataset, split):

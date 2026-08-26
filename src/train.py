@@ -45,6 +45,10 @@ SKOPS_TRUSTED_TYPES = [
     # the booster and its sklearn wrapper both have to be named.
     "xgboost.core.Booster",
     "xgboost.sklearn.XGBClassifier",
+    # The calibration wrapper around LinearSVC, which supplies the predict_proba
+    # that the AUC metrics need.
+    "sklearn.calibration._CalibratedClassifier",
+    "sklearn.calibration._SigmoidCalibration",
 ]
 
 

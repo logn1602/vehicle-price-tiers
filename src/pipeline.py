@@ -34,17 +34,23 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.utils.class_weight import compute_sample_weight
 from xgboost import XGBClassifier
 
+from src.ordinal import OrdinalClassifier
+
 MODEL_NAMES = [
     "decision_tree",
     "random_forest",
     "xgboost",
     "logistic_regression",
     "svm",
+    # Same booster, same hyperparameters, but decomposed into cumulative binary
+    # problems so the tier ordering is in the objective rather than only in the
+    # evaluation. See src/ordinal.py.
+    "xgboost_ordinal",
 ]
 
 # Models fitted with an explicit early-stopping protocol rather than a plain
-# Pipeline.fit. Currently only XGBoost supports it.
-EARLY_STOPPING_MODELS = {"xgboost"}
+# Pipeline.fit.
+EARLY_STOPPING_MODELS = {"xgboost", "xgboost_ordinal"}
 
 
 # ---------------------------------------------------------------------------
@@ -134,6 +140,22 @@ def build_estimator(name: str, cfg: dict, n_classes: int, for_v1: bool = False) 
             # not on fit(). v1's commented-out line was already stale syntax.
             **p,
         )
+
+    if name == "xgboost_ordinal":
+        p = dict(m["xgboost"])
+        # Identical hyperparameters to the flat model, so any difference in the
+        # results is attributable to the decomposition and not to tuning. The
+        # one necessary change: each sub-model solves a BINARY problem, so the
+        # multiclass log-loss inherited from config would be evaluated against
+        # two-class labels and xgboost rejects it.
+        p["eval_metric"] = "logloss"
+        base = XGBClassifier(
+            objective="binary:logistic",
+            random_state=seed,
+            n_jobs=-1,
+            **p,
+        )
+        return OrdinalClassifier(estimator=base, n_classes=n_classes)
 
     if name == "logistic_regression":
         p = m["logistic_regression"]
