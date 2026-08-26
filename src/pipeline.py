@@ -179,12 +179,11 @@ def build_pipeline(
     the missing scaler.
     """
     p = cfg["pipeline"]
-    k = min(p["select_k_best"], 10_000)
     return Pipeline(
         [
             ("impute", SimpleImputer(strategy=p["imputer_strategy"])),
             ("variance", VarianceThreshold(threshold=p["variance_threshold"])),
-            ("select", SelectKBest(score_func=f_classif, k=k)),
+            ("select", SelectKBest(score_func=f_classif, k=p["select_k_best"])),
             ("scale", RobustScaler()),
             ("clf", build_estimator(name, cfg, n_classes, for_v1=for_v1)),
         ]

@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  lint:
+    name: ruff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: pip install ruff
+      # Lint only. A formatter gate is not in scope and would rewrite every
+      # file in the repository for no requested benefit.
+      - name: ruff check
+        run: ruff check . --output-format=github
+
+  test:
+    name: pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - name: install
+        run: pip install -e ".[dev]"
+      - name: pytest
+        # The dataset is not in the repository, so tests marked `slow` -- the
+        # ones that read the real Parquet layers -- are deselected. Everything
+        # they would cover is exercised against synthetic data by the smoke job.
+        run: pytest -m "not slow" --cov=src --cov-report=term-missing --cov-report=xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage.xml
+          if-no-files-found: ignore
+
+  smoke:
+    name: smoke train (5k rows, under 2 min)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - name: install
+        run: pip install -e ".[dev]"
+      - name: end-to-end on synthetic data
+        # Exercises every stage together: chunked ingest, schema contracts,
+        # quality gates, lineage, features, split, and five model fits. Fails
+        # if it exceeds the two-minute budget.
+        run: python scripts/smoke_test.py --rows 5000 --budget 120
+
+  readme:
+    name: README consistency
+    runs-on: ubuntu-latest
+    needs: [test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - name: install
+        run: pip install -e ".[dev]"
+      - name: every numeric claim traces to a generated artifact
+        # results/*.json are committed, so this runs without the dataset.
+        run: python scripts/verify_readme.py

@@ -1,0 +1,41 @@
+# Two services: the inference API and the MLflow tracking UI.
+#
+#   docker compose up --build
+#   API      -> http://localhost:8000/docs
+#   MLflow   -> http://localhost:5000
+#
+# Both read artifacts produced on the host by `python scripts/run_all.py`.
+# Nothing here trains: training is a batch job, not a long-running service.
+
+services:
+  api:
+    build:
+      context: .
+      target: runtime
+    ports:
+      - "8000:8000"
+    volumes:
+      # Read-only: the service must never mutate the model it serves.
+      - ./artifacts:/app/artifacts:ro
+    environment:
+      - PYTHONPATH=/app
+    restart: unless-stopped
+
+  mlflow:
+    build:
+      context: .
+      target: runtime
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./mlflow.db:/app/mlflow.db
+      - ./mlartifacts:/app/mlartifacts
+    # MLflow 3 put the filesystem store into maintenance mode; SQLite is the
+    # supported local backend and matches conf/config.yaml.
+    command: >
+      mlflow ui
+      --backend-store-uri sqlite:///mlflow.db
+      --default-artifact-root /app/mlartifacts
+      --host 0.0.0.0
+      --port 5000
+    restart: unless-stopped

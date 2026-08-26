@@ -23,9 +23,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.config import load_config  # noqa: E402
 from src.ingest import build_gold, build_silver, ingest_bronze  # noqa: E402
+from src.train import print_report, train_all, write_metrics  # noqa: E402
 from src.validate import LineageTracker  # noqa: E402
 
-ALL_STAGES = ["ingest", "silver", "gold"]
+ALL_STAGES = ["ingest", "silver", "gold", "train"]
 
 
 def set_seeds(seed: int) -> None:
@@ -62,6 +63,26 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=[],
         metavar="KEY.PATH=VALUE",
         help="override a config value; repeatable",
+    )
+    p.add_argument(
+        "--sample",
+        type=int,
+        default=None,
+        metavar="N",
+        help="train on a stratified subsample of N rows (for validating the run)",
+    )
+    p.add_argument(
+        "--models",
+        default=None,
+        help="comma-separated subset of models to train",
+    )
+    p.add_argument(
+        "--no-cv",
+        action="store_true",
+        help="skip 5-fold cross-validation (much faster; not for published runs)",
+    )
+    p.add_argument(
+        "--no-mlflow", action="store_true", help="disable MLflow tracking"
     )
     return p.parse_args(argv)
 
@@ -112,13 +133,39 @@ def main(argv: list[str] | None = None) -> int:
         for label, count in gm["class_counts"].items():
             print(f"    {label:<12}{count:>9,}  ({count / total * 100:5.2f}%)")
 
-    lineage_path = tracker.write(cfg["paths"]["lineage"])
+    # Only rewrite lineage when a stage that produces it actually ran.
+    # Otherwise `--stages train` would overwrite a complete lineage record with
+    # an empty one, silently destroying the audit trail the whole project is
+    # built around.
+    if tracker.records:
+        lineage_path = tracker.write(cfg["paths"]["lineage"])
+        print("\n" + "=" * 72)
+        print("LINEAGE")
+        print("=" * 72)
+        print(tracker.table())
+        print(f"\nWrote {lineage_path}")
+    elif set(stages) & {"ingest", "silver", "gold"}:
+        raise RuntimeError(
+            "data stages ran but recorded no lineage -- this should be impossible"
+        )
+    else:
+        print("\n(no data stages requested; results/lineage.json left untouched)")
 
-    print("\n" + "=" * 72)
-    print("LINEAGE")
-    print("=" * 72)
-    print(tracker.table())
-    print(f"\nWrote {lineage_path}")
+    if "train" in stages:
+        print("\n[train] fitting models")
+        if args.sample:
+            print(f"  SUBSAMPLE: {args.sample:,} rows -- not a publishable run")
+        payload = train_all(
+            cfg,
+            models=[m.strip() for m in args.models.split(",")] if args.models else None,
+            sample_size=args.sample,
+            include_cv=not args.no_cv,
+            track=not args.no_mlflow,
+        )
+        print_report(payload, cfg)
+        metrics_path = write_metrics(payload, cfg)
+        print(f"\nWrote {metrics_path}")
+
     return 0
 
 

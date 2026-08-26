@@ -190,7 +190,9 @@ model:
     class_weight: balanced
     n_jobs: -1
   logistic_regression:
-    penalty: l2
+    # v1 set penalty='l2'; scikit-learn 1.8 deprecated the argument and L2 is
+    # the default for lbfgs, so omitting it preserves v1's behaviour exactly
+    # while keeping the run warning-free.
     C: 1.0
     solver: lbfgs
     max_iter: 500
@@ -236,7 +238,10 @@ evaluation:
   leakage_correlation_threshold: 0.95
 
 mlflow:
-  tracking_uri: file:./mlruns
+  # MLflow 3 put the filesystem store into maintenance mode and raises rather
+  # than warns. SQLite is the recommended local backend and is what
+  # docker-compose brings up for the UI. Gitignored via *.db.
+  tracking_uri: sqlite:///mlflow.db
   experiment_name: vehicle-price-tiers
   registered_model_name: vehicle-price-tier-classifier
 
