@@ -41,6 +41,10 @@ from src.pipeline import (
 SKOPS_TRUSTED_TYPES = [
     "numpy.dtype",
     "sklearn.feature_selection._univariate_selection.f_classif",
+    # The gradient-boosted model itself. skops has no native xgboost support, so
+    # the booster and its sklearn wrapper both have to be named.
+    "xgboost.core.Booster",
+    "xgboost.sklearn.XGBClassifier",
 ]
 
 
