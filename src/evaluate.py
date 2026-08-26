@@ -245,7 +245,12 @@ _METRIC_FUNCTIONS = {
 
 
 def cross_validate_pipeline(
-    pipe, X_train: pd.DataFrame, y_train: np.ndarray, cfg: dict, weighted: bool = True
+    pipe,
+    X_train: pd.DataFrame,
+    y_train: np.ndarray,
+    cfg: dict,
+    weighted: bool = True,
+    round_budget: int | None = None,
 ) -> dict:
     """Stratified k-fold CV with the ENTIRE pipeline inside each fold.
 
@@ -280,9 +285,20 @@ def cross_validate_pipeline(
     template = clone(pipe)
     estimator = template.steps[-1][1]
     early_stopping_disabled = False
-    if getattr(estimator, "early_stopping_rounds", None) is not None:
-        estimator.set_params(early_stopping_rounds=None)
-        early_stopping_disabled = True
+    params = estimator.get_params()
+    for key in ("early_stopping_rounds", "estimator__early_stopping_rounds"):
+        if params.get(key) is not None:
+            estimator.set_params(**{key: None})
+            early_stopping_disabled = True
+
+    # With stopping disabled, a fold would run the full round budget. For the
+    # tuned configuration that is 3,000 rounds at depth 8 -- both ruinously slow
+    # and, worse, a different estimator from the ~450-round model whose test
+    # score sits beside it. Cap each fold at where the real fit stopped.
+    if early_stopping_disabled and round_budget:
+        for key in ("n_estimators", "estimator__n_estimators"):
+            if key in params:
+                estimator.set_params(**{key: round_budget})
 
     # `weighted` must mirror what `src.pipeline.fit` actually does, which is
     # narrower than "balance everything": only XGBoost receives sample_weight,
@@ -317,6 +333,7 @@ def cross_validate_pipeline(
         "std": float(array.std()),
         "early_stopping_disabled_for_cv": early_stopping_disabled,
         "sample_weighted": bool(weighted),
+        "round_budget_per_fold": round_budget,
     }
 
 
@@ -392,12 +409,14 @@ def evaluate_model(
         # here. Everything else is balanced via class_weight on the estimator.
         from src.pipeline import EARLY_STOPPING_MODELS
 
+        stopped_at = getattr(pipe.steps[-1][1], "best_iteration", None)
         result["cross_validation"] = cross_validate_pipeline(
             pipe,
             X_train,
             y_train,
             cfg,
             weighted=weighted and name in EARLY_STOPPING_MODELS,
+            round_budget=(int(stopped_at) + 1) if stopped_at is not None else None,
         )
 
     return result

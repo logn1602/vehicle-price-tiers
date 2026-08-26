@@ -176,6 +176,32 @@ model:
     n_estimators: 500
     early_stopping_rounds: 30
     eval_metric: mlogloss
+  # Found by scripts/tune.py: 15 randomised trials scored on the validation
+  # split, never on test. Reported as a SEPARATE configuration -- v1's
+  # parameters above stay the ablation's reference so that comparison remains
+  # apples-to-apples.
+  #
+  # The diagnosis this fixes: v1's max_depth=4 / min_child_weight=7 were chosen
+  # for a 6,067-row experiment. On 233,544 rows they underfit badly -- the
+  # train/test gap was 0.007 and, given a 3,000-round budget, that configuration
+  # was still improving at round 2,998.
+  #
+  # n_estimators is deliberately NOT the 454 the search landed on: that was the
+  # stopping point for a 120k subsample. Early stopping re-picks it against the
+  # real validation set rather than inheriting a number from a smaller run.
+  xgboost_tuned:
+    max_depth: 8
+    min_child_weight: 1
+    learning_rate: 0.15
+    subsample: 0.8
+    colsample_bytree: 0.8
+    gamma: 0.1
+    reg_alpha: 0.0
+    reg_lambda: 10.0
+    n_estimators: 3000
+    early_stopping_rounds: 50
+    eval_metric: mlogloss
+
   decision_tree:
     max_depth: 10
     min_samples_split: 20

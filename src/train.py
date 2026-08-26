@@ -25,6 +25,8 @@ import pandas as pd
 from src.config import config_hash, file_hash
 from src.evaluate import evaluate_model, majority_baseline, results_table, save_figures
 from src.pipeline import (
+    EARLY_STOPPING_MODELS,
+    HYPERPARAMETER_BLOCK,
     MODEL_NAMES,
     build_pipeline,
     encode_target,
@@ -32,6 +34,9 @@ from src.pipeline import (
     selected_features,
     stratified_split,
 )
+
+CONFIG_KEY = {name: name for name in MODEL_NAMES}
+CONFIG_KEY.update(HYPERPARAMETER_BLOCK)
 
 # MLflow 3 serialises sklearn models with skops, which refuses to persist types
 # it does not recognise. These are the ones our pipeline legitimately contains:
@@ -49,6 +54,8 @@ SKOPS_TRUSTED_TYPES = [
     # that the AUC metrics need.
     "sklearn.calibration._CalibratedClassifier",
     "sklearn.calibration._SigmoidCalibration",
+    # This project's own ordinal wrapper.
+    "src.ordinal.OrdinalClassifier",
 ]
 
 
@@ -176,12 +183,22 @@ def train_all(
         metrics["selected_features"] = selected_features(fitted, list(X.columns))
         metrics["n_selected_features"] = len(metrics["selected_features"])
 
-        if name == "xgboost":
+        if name in EARLY_STOPPING_MODELS:
             booster = fitted.named_steps["clf"]
-            metrics["best_iteration"] = int(booster.best_iteration)
-            metrics["early_stopped"] = bool(
-                booster.best_iteration < cfg["model"]["xgboost"]["n_estimators"] - 1
-            )
+            budget = cfg["model"][CONFIG_KEY[name]]["n_estimators"]
+            best_iteration = booster.best_iteration
+            if best_iteration is not None:
+                metrics["best_iteration"] = int(best_iteration)
+                metrics["n_estimators_budget"] = int(budget)
+                # Whether the validation set actually chose a stopping point,
+                # or the model simply ran out of rounds. On v1's inherited
+                # hyperparameters it is the latter, which is the clearest
+                # single symptom of underfitting at this sample size.
+                metrics["early_stopped"] = bool(best_iteration < budget - 1)
+            if hasattr(booster, "monotonicity_violation_rate_"):
+                metrics["monotonicity_violation_rate"] = float(
+                    booster.monotonicity_violation_rate_
+                )
 
         if track:
             metrics["mlflow_run_id"] = _mlflow_run(
@@ -272,8 +289,7 @@ def train_all(
 
 def _params_for(name: str, cfg: dict) -> dict:
     """Hyperparameters for one model, flattened for MLflow."""
-    key = {"svm": "svm"}.get(name, name)
-    params = dict(cfg["model"].get(key, {}))
+    params = dict(cfg["model"].get(CONFIG_KEY[name], {}))
     params.update(
         {
             "seed": cfg["seed"],

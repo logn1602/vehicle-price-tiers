@@ -60,6 +60,10 @@ class Configuration:
     balanced: bool     # balanced sample weights on XGBoost
     early_stopping: bool
     changed: str       # what this row changes relative to the one above
+    # Swap in a different estimator for the boosted slot. Everything above is a
+    # correctness fix; this is the one row that is a performance change, and it
+    # is kept visibly separate for that reason.
+    xgb_variant: str = "xgboost"
 
 
 CONFIGURATIONS = [
@@ -87,6 +91,20 @@ CONFIGURATIONS = [
         "+ early stopping on val", "full", False, True, True, True,
         "validation set drives early stopping instead of being discarded",
     ),
+    # Everything above restores correctness. The two below are improvements,
+    # separated so that "what the fixes were worth" cannot be confused with
+    # "what tuning was worth".
+    Configuration(
+        "+ tuned hyperparameters", "full", False, True, True, True,
+        "depth 8 and a real round budget, from scripts/tune.py; v1's depth-4 "
+        "settings were chosen for a 6,067-row experiment",
+        xgb_variant="xgboost_tuned",
+    ),
+    Configuration(
+        "+ ordinal decomposition", "full", False, True, True, True,
+        "tier ordering moved into the objective via cumulative binary models",
+        xgb_variant="xgboost_ordinal",
+    ),
 ]
 
 # The models the table tracks. XGBoost is the one v1 selected and reported;
@@ -112,6 +130,18 @@ def reconstruct_v1_sample(
         parts.append(pool.sample(n=n, random_state=seed).index)
     idx = np.concatenate(parts)
     return X.loc[idx], y.loc[idx]
+
+
+def disable_early_stopping(estimator) -> None:
+    """Turn off early stopping wherever the parameter lives.
+
+    On a bare XGBClassifier it is a top-level parameter; on the ordinal wrapper
+    it belongs to the nested base estimator.
+    """
+    params = estimator.get_params()
+    for key in ("early_stopping_rounds", "estimator__early_stopping_rounds"):
+        if key in params:
+            estimator.set_params(**{key: None})
 
 
 def set_class_weight(estimator, value: str | None) -> None:
@@ -174,7 +204,9 @@ def evaluate_configuration(
         "models": {},
     }
 
-    for name in TRACKED:
+    for tracked_name in TRACKED:
+        # The boosted slot can hold a variant; the SVM slot never does.
+        name = conf.xgb_variant if tracked_name == "xgboost" else tracked_name
         if conf.leaky:
             # The preprocessing already happened outside; give the estimator the
             # bare features, scaling only where v1 scaled.
@@ -190,11 +222,11 @@ def evaluate_configuration(
 
             weight = (
                 compute_sample_weight("balanced", y_train)
-                if conf.balanced and name == "xgboost"
+                if conf.balanced and name.startswith("xgboost")
                 else None
             )
-            if name == "xgboost":
-                estimator.set_params(early_stopping_rounds=None)
+            if name.startswith("xgboost"):
+                disable_early_stopping(estimator)
                 estimator.fit(Xtr, y_train, sample_weight=weight)
             else:
                 estimator.fit(Xtr, y_train)
@@ -206,8 +238,8 @@ def evaluate_configuration(
             set_class_weight(pipe.named_steps["clf"], "balanced" if conf.balanced else None)
             if not conf.scale_all and name != "logistic_regression":
                 pipe.set_params(scale="passthrough")
-            if not conf.early_stopping and name == "xgboost":
-                pipe.named_steps["clf"].set_params(early_stopping_rounds=None)
+            if not conf.early_stopping and name.startswith("xgboost"):
+                disable_early_stopping(pipe.named_steps["clf"])
             fitted = fit(
                 pipe,
                 name,
@@ -223,7 +255,10 @@ def evaluate_configuration(
 
         per_class = per_class_metrics(y_test, y_pred, labels)
         luxury = next(c for c in per_class if c["class"] == "Luxury")
-        row["models"][name] = {
+        # Keyed by the tracked slot, not the variant, so the table can be read
+        # down a column. `variant` records which estimator actually ran.
+        row["models"][tracked_name] = {
+            "variant": name,
             "accuracy": float(accuracy_score(y_test, y_pred)),
             "macro_f1": float(f1_score(y_test, y_pred, average="macro", zero_division=0)),
             "weighted_f1": float(
@@ -236,8 +271,8 @@ def evaluate_configuration(
             **ordinal_metrics(y_test, y_pred),
         }
         print(
-            f"      {name:<10} macro F1 {row['models'][name]['macro_f1']:.4f}"
-            f"  acc {row['models'][name]['accuracy']:.4f}"
+            f"      {name:<16} macro F1 {row['models'][tracked_name]['macro_f1']:.4f}"
+            f"  acc {row['models'][tracked_name]['accuracy']:.4f}"
             f"  luxury recall {luxury['recall']:.4f}"
         )
 

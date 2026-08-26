@@ -46,11 +46,33 @@ MODEL_NAMES = [
     # problems so the tier ordering is in the objective rather than only in the
     # evaluation. See src/ordinal.py.
     "xgboost_ordinal",
+    # Same architecture as `xgboost`, hyperparameters from scripts/tune.py.
+    # Separate from `xgboost` so v1's parameters remain the ablation reference.
+    "xgboost_tuned",
+    # The ordinal decomposition at tuned hyperparameters. Without this pair,
+    # "ordinal does not help" would only be established for two underfit
+    # models, which is a far weaker claim than it sounds.
+    "xgboost_ordinal_tuned",
 ]
 
 # Models fitted with an explicit early-stopping protocol rather than a plain
 # Pipeline.fit.
-EARLY_STOPPING_MODELS = {"xgboost", "xgboost_ordinal"}
+EARLY_STOPPING_MODELS = {
+    "xgboost",
+    "xgboost_ordinal",
+    "xgboost_tuned",
+    "xgboost_ordinal_tuned",
+}
+
+# Which config block supplies each model's hyperparameters. The ordinal
+# variants share a block with their flat counterpart so the only difference
+# between the pair is the decomposition.
+HYPERPARAMETER_BLOCK = {
+    "xgboost": "xgboost",
+    "xgboost_ordinal": "xgboost",
+    "xgboost_tuned": "xgboost_tuned",
+    "xgboost_ordinal_tuned": "xgboost_tuned",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -129,8 +151,8 @@ def build_estimator(name: str, cfg: dict, n_classes: int, for_v1: bool = False) 
         p = m["random_forest"]
         return RandomForestClassifier(random_state=seed, **p)
 
-    if name == "xgboost":
-        p = dict(m["xgboost"])
+    if name in {"xgboost", "xgboost_tuned"}:
+        p = dict(m[HYPERPARAMETER_BLOCK[name]])
         return XGBClassifier(
             objective="multi:softprob",
             num_class=n_classes,
@@ -141,8 +163,8 @@ def build_estimator(name: str, cfg: dict, n_classes: int, for_v1: bool = False) 
             **p,
         )
 
-    if name == "xgboost_ordinal":
-        p = dict(m["xgboost"])
+    if name in {"xgboost_ordinal", "xgboost_ordinal_tuned"}:
+        p = dict(m[HYPERPARAMETER_BLOCK[name]])
         # Identical hyperparameters to the flat model, so any difference in the
         # results is attributable to the decomposition and not to tuning. The
         # one necessary change: each sub-model solves a BINARY problem, so the
