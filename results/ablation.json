@@ -25,6 +25,7 @@
       },
       "models": {
         "xgboost": {
+          "variant": "xgboost",
           "accuracy": 0.6548599670510709,
           "macro_f1": 0.5817781073386503,
           "weighted_f1": 0.6458368688498503,
@@ -37,6 +38,7 @@
           "tier_mae": 0.371499176276771
         },
         "svm": {
+          "variant": "svm",
           "accuracy": 0.586490939044481,
           "macro_f1": 0.42819256939101324,
           "weighted_f1": 0.5499353936829762,
@@ -64,6 +66,7 @@
       },
       "models": {
         "xgboost": {
+          "variant": "xgboost",
           "accuracy": 0.6730850749527932,
           "macro_f1": 0.6425407730826167,
           "weighted_f1": 0.6713050077254754,
@@ -76,6 +79,7 @@
           "tier_mae": 0.3600431604773343
         },
         "svm": {
+          "variant": "svm",
           "accuracy": 0.558452902413647,
           "macro_f1": 0.43607551691314006,
           "weighted_f1": 0.5361221088596627,
@@ -103,6 +107,7 @@
       },
       "models": {
         "xgboost": {
+          "variant": "xgboost",
           "accuracy": 0.6730850749527932,
           "macro_f1": 0.6425407730826167,
           "weighted_f1": 0.6713050077254754,
@@ -115,6 +120,7 @@
           "tier_mae": 0.3600431604773343
         },
         "svm": {
+          "variant": "svm",
           "accuracy": 0.558452902413647,
           "macro_f1": 0.43607551691314006,
           "weighted_f1": 0.5361221088596627,
@@ -142,6 +148,7 @@
       },
       "models": {
         "xgboost": {
+          "variant": "xgboost",
           "accuracy": 0.6730850749527932,
           "macro_f1": 0.6425407730826167,
           "weighted_f1": 0.6713050077254754,
@@ -154,6 +161,7 @@
           "tier_mae": 0.3600431604773343
         },
         "svm": {
+          "variant": "svm",
           "accuracy": 0.6201235725571298,
           "macro_f1": 0.5870439926044545,
           "weighted_f1": 0.6182121799168594,
@@ -181,6 +189,7 @@
       },
       "models": {
         "xgboost": {
+          "variant": "xgboost",
           "accuracy": 0.6450693008259579,
           "macro_f1": 0.6270876525354848,
           "weighted_f1": 0.6494799295388572,
@@ -193,6 +202,7 @@
           "tier_mae": 0.4093565749078344
         },
         "svm": {
+          "variant": "svm",
           "accuracy": 0.6195198396896556,
           "macro_f1": 0.5871293468785981,
           "weighted_f1": 0.6177997828709996,
@@ -220,6 +230,7 @@
       },
       "models": {
         "xgboost": {
+          "variant": "xgboost",
           "accuracy": 0.6450693008259579,
           "macro_f1": 0.6270876525354848,
           "weighted_f1": 0.6494799295388572,
@@ -232,6 +243,7 @@
           "tier_mae": 0.4093565749078344
         },
         "svm": {
+          "variant": "svm",
           "accuracy": 0.6195198396896556,
           "macro_f1": 0.5871293468785981,
           "weighted_f1": 0.6177997828709996,
@@ -242,6 +254,129 @@
           "quadratic_weighted_kappa": 0.6714578830494626,
           "linear_weighted_kappa": 0.5647339428859404,
           "tier_mae": 0.4270189726264949
+        }
+      }
+    },
+    {
+      "configuration": "+ tuned hyperparameters",
+      "changed": "depth 8 and a real round budget, from scripts/tune.py; v1's depth-4 settings were chosen for a 6,067-row experiment",
+      "rows": 389242,
+      "n_train": 233544,
+      "n_test": 77849,
+      "flags": {
+        "leaky": false,
+        "scale_all": true,
+        "balanced": true,
+        "early_stopping": true
+      },
+      "models": {
+        "xgboost": {
+          "variant": "xgboost_tuned",
+          "accuracy": 0.7275623322072217,
+          "macro_f1": 0.7202410278233248,
+          "weighted_f1": 0.7283833561908312,
+          "luxury_recall": 0.8326806692773229,
+          "luxury_precision": 0.5709055406394923,
+          "luxury_support": 5618,
+          "adjacent_accuracy": 0.966139577900808,
+          "quadratic_weighted_kappa": 0.777014511258415,
+          "linear_weighted_kappa": 0.7016545344931002,
+          "tier_mae": 0.31241249084766665
+        },
+        "svm": {
+          "variant": "svm",
+          "accuracy": 0.6195198396896556,
+          "macro_f1": 0.5871293468785981,
+          "weighted_f1": 0.6177997828709996,
+          "luxury_recall": 0.35315058739765043,
+          "luxury_precision": 0.6108374384236454,
+          "luxury_support": 5618,
+          "adjacent_accuracy": 0.9581369060617348,
+          "quadratic_weighted_kappa": 0.6714578830494626,
+          "linear_weighted_kappa": 0.5647339428859404,
+          "tier_mae": 0.4270189726264949
+        }
+      }
+    },
+    {
+      "configuration": "+ ordinal decomposition",
+      "changed": "tier ordering moved into the objective via cumulative binary models, at the tuned hyperparameters -- rows are cumulative, so pointing this at the untuned variant would charge the decomposition for losing the tuning as well",
+      "rows": 389242,
+      "n_train": 233544,
+      "n_test": 77849,
+      "flags": {
+        "leaky": false,
+        "scale_all": true,
+        "balanced": true,
+        "early_stopping": true
+      },
+      "models": {
+        "xgboost": {
+          "variant": "xgboost_ordinal_tuned",
+          "accuracy": 0.7224370255237704,
+          "macro_f1": 0.7153582833067744,
+          "weighted_f1": 0.7233768084357577,
+          "luxury_recall": 0.8301886792452831,
+          "luxury_precision": 0.5657447840853954,
+          "luxury_support": 5618,
+          "adjacent_accuracy": 0.9667433107682822,
+          "quadratic_weighted_kappa": 0.774937604493696,
+          "linear_weighted_kappa": 0.697117058874928,
+          "tier_mae": 0.3168698377628486
+        },
+        "svm": {
+          "variant": "svm",
+          "accuracy": 0.6195198396896556,
+          "macro_f1": 0.5871293468785981,
+          "weighted_f1": 0.6177997828709996,
+          "luxury_recall": 0.35315058739765043,
+          "luxury_precision": 0.6108374384236454,
+          "luxury_support": 5618,
+          "adjacent_accuracy": 0.9581369060617348,
+          "quadratic_weighted_kappa": 0.6714578830494626,
+          "linear_weighted_kappa": 0.5647339428859404,
+          "tier_mae": 0.4270189726264949
+        }
+      }
+    },
+    {
+      "configuration": "(tuned, weighting removed)",
+      "changed": "comparison row, not a cumulative step: balanced weighting removed from the tuned configuration",
+      "rows": 389242,
+      "n_train": 233544,
+      "n_test": 77849,
+      "flags": {
+        "leaky": false,
+        "scale_all": true,
+        "balanced": false,
+        "early_stopping": true
+      },
+      "models": {
+        "xgboost": {
+          "variant": "xgboost_tuned",
+          "accuracy": 0.7381083893177819,
+          "macro_f1": 0.7345211903280069,
+          "weighted_f1": 0.7380521183953861,
+          "luxury_recall": 0.663937344250623,
+          "luxury_precision": 0.7674897119341564,
+          "luxury_support": 5618,
+          "adjacent_accuracy": 0.9727035671620702,
+          "quadratic_weighted_kappa": 0.7865234643293714,
+          "linear_weighted_kappa": 0.7088629124665806,
+          "tier_mae": 0.2920268725352927
+        },
+        "svm": {
+          "variant": "svm",
+          "accuracy": 0.6201235725571298,
+          "macro_f1": 0.5870439926044545,
+          "weighted_f1": 0.6182121799168594,
+          "luxury_recall": 0.35065859736561056,
+          "luxury_precision": 0.6100960049550944,
+          "luxury_support": 5618,
+          "adjacent_accuracy": 0.958175442202212,
+          "quadratic_weighted_kappa": 0.6730654682809827,
+          "linear_weighted_kappa": 0.5659761855170247,
+          "tier_mae": 0.42614548677568115
         }
       }
     }
