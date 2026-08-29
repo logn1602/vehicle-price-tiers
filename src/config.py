@@ -19,16 +19,13 @@ DEFAULT_CONFIG_PATH = Path("conf/config.yaml")
 
 
 class Config(dict):
-    """A dict with dotted-path access, so `cfg.get_path('model.xgboost.max_depth')`
-    reads the same way the CLI override is written."""
+    """A plain dict with dotted-path assignment, so a CLI override can be
+    written the way it reads: `--set model.xgboost.max_depth=8`.
 
-    def get_path(self, dotted: str, default: Any = None) -> Any:
-        node: Any = self
-        for part in dotted.split("."):
-            if not isinstance(node, dict) or part not in node:
-                return default
-            node = node[part]
-        return node
+    Reads stay ordinary subscripting. A matching `get_path` existed here and was
+    never called once -- config access throughout the codebase is
+    `cfg["model"]["xgboost"]`, which is clearer at the point of use.
+    """
 
     def set_path(self, dotted: str, value: Any) -> None:
         parts = dotted.split(".")
