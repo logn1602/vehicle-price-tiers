@@ -136,6 +136,53 @@ def ablation_table(ablation: dict | None, model: str = "xgboost") -> str:
     return "\n".join(lines)
 
 
+def error_distance_table(model: dict) -> str:
+    """How far wrong the model is when it is wrong, in tier units.
+
+    Read straight from the `error_profile` block that src/evaluate.py writes.
+    Recomputing it here would produce numbers that scripts/verify_readme.py
+    cannot trace to any artifact -- which it correctly rejected when an earlier
+    version of this function did exactly that.
+    """
+    profile = model["error_profile"]
+    lines = [
+        "| Error size | Listings | Share of errors | Share of all |",
+        "|---|---|---|---|",
+    ]
+    for bucket in profile["by_distance"]:
+        d = bucket["distance"]
+        lines.append(
+            f"| off by {d} tier{'s' if d > 1 else ''} "
+            f"| {thousands(bucket['count'])} "
+            f"| {pct(100 * bucket['share_of_errors'], 1)} "
+            f"| {pct(100 * bucket['share_of_all'], 1)} |"
+        )
+    return "\n".join(lines)
+
+
+def dominant_error_story(model: dict) -> str:
+    """Largest confusions, read rather than assumed.
+
+    An earlier version of this template asserted that Luxury-to-Premium was the
+    dominant error mode. That was true under v1's hyperparameters and stopped
+    being true once they were fixed -- exactly the kind of claim that goes stale
+    silently, which is why this project generates its prose instead of typing it.
+    """
+    top = model["error_profile"]["largest_confusions"][:3]
+    lead = top[0]
+    rest = ", ".join(
+        f"{c['true']} read as {c['predicted']} ({thousands(c['count'])})" for c in top[1:]
+    )
+    worst = min(model["per_class"], key=lambda c: c["recall"])
+    return (
+        f"The largest single confusion is **{lead['true']} read as "
+        f"{lead['predicted']}**, {thousands(lead['count'])} listings, "
+        f"{pct(100 * lead['share_of_errors'], 1)} of all errors. Next are {rest}. "
+        f"The weakest tier by recall is **{worst['class']}** at "
+        f"{fmt(worst['recall'])} on {thousands(worst['support'])} listings."
+    )
+
+
 def luxury_story(model: dict) -> str:
     """The finding, expressed in counts rather than a metric."""
     conf = model["confusion"]
@@ -173,6 +220,11 @@ def build_readme(
     counts = features["groups"]
     raw_rows = cfg["data_contract"]["raw"]["rows"]
     v1_rows = cfg["v1_reconstruction"]["n_rows"]
+    integrity = metrics.get("data_integrity", {})
+    redundancy_pct = pct(integrity.get("train_redundancy_pct", 0.0))
+    duplicate_pct = pct(integrity.get("test_duplicate_pct", 0.0))
+    dup_error = fmt(integrity.get("error_rate_on_duplicated") or 0.0)
+    unique_error = fmt(integrity.get("error_rate_on_unique") or 0.0)
 
     return f"""# Vehicle Price Tier Classification
 
@@ -221,10 +273,30 @@ That is the error that costs money. A Luxury vehicle listed as Premium is
 mispriced downward by at least the width of a tier, and the Premium/Luxury
 boundary is exactly where dealer margin concentrates. Overall accuracy hides
 this completely: Luxury is a small share of listings, so a model can ignore the
-tier almost entirely and still look respectable.
+tier almost entirely and still look respectable — which is precisely what v1
+did, at a Luxury recall of 0.203.
 
-Balanced sample weights are what move this number. The ablation below isolates
-how much.
+Two things move it, and they move it differently.
+
+**Balanced weighting trades precision for recall.** It lifts Luxury recall
+sharply but pushes genuine Premium listings up into Luxury, so Premium recall
+falls. The error relocates rather than disappearing. Whether that is the right
+trade depends on which mistake costs more, and nothing in this dataset answers
+that question.
+
+**Tuning improves both sides at once**, which weighting could not. Fixing the
+inherited hyperparameters raises Luxury precision and recall together *and*
+recovers Premium recall. It is the single largest effect in the ablation below,
+larger than every correctness fix combined.
+
+That ordering is worth stating plainly, because it is the opposite of the
+intuition that started this rebuild: the correctness fixes were what made any
+number trustworthy, but almost none of them moved the number. The number moved
+when the model was finally given enough capacity to use the data it had.
+
+Both facts matter, and they are different kinds of fact. A pipeline that is
+right but underpowered produces an honest bad answer. A pipeline that is wrong
+produces a number that cannot be interpreted at all, however large it is.
 
 ## Architecture
 
@@ -262,14 +334,35 @@ drops more than 25% of its input without a whitelisted reason.
 **Leakage in three transforms.** Imputation, variance filtering and feature
 selection were all fitted on the full dataset before the train/test split, and
 `SelectKBest` saw every label. Only the scaler was train-only. Everything that
-learns now sits inside an `sklearn.Pipeline` fitted on the training split alone,
-and `tests/test_leakage.py` demonstrates that train-only selection picks a
-different feature set than full-data selection — so the leak was doing
-something, and removing it is measurable.
+learns now sits inside an `sklearn.Pipeline` fitted on the training split alone.
+
+The honest result: at this sample size **the leak was worth nothing**. The
+ablation row for removing it moves no metric at all. Fitting `SelectKBest` on
+233,544 rows picks the identical 25 features as fitting it on 389,242, and the
+only columns with any missing values are the two condition-derived ones — 1.56%
+of cells — whose medians are the same either way.
+
+That is not a licence to leak. It is a statement about this dataset: these
+particular statistics have converged by a quarter of a million rows. With target
+encoding, or heavy missingness, or v1's 6,067 rows, the same ordering could
+matter a great deal. The point is that you cannot know which case you are in
+without the clean pipeline to measure against.
 
 **Class weighting skipped the reported model.** `class_weight='balanced'` was
 set on the decision tree and random forest but not on XGBoost, which was the
 model selected and written up. Weighting is now applied uniformly.
+
+That fix turned out to be treating a symptom. Balanced weighting does not teach
+the model the minority tier; it buys recall by spending precision. At v1's
+`max_depth=4` that trade was overwhelmingly worth it, because the unweighted
+model reached only 0.41 Luxury recall — it lacked the capacity to represent the
+class at all. At tuned depth the unweighted model already reaches 0.66 recall at
+far higher precision, and the same trade now *loses* on macro F1, the declared
+primary metric. The ablation carries a row for this.
+
+The real cause of v1's Luxury failure was capacity, not the missing weights.
+The weights were a workaround that looked like a cure because the model was too
+small for the alternative to be visible.
 
 **Only one model was scaled.** A RBF-kernel SVM trained on unscaled features
 scored worst of the five and the report attributed that to the algorithm.
@@ -277,8 +370,13 @@ Scaling is now inside the pipeline and applies to every model.
 
 **The validation set was never used.** A 60/20/20 split built `X_val`, scaled
 it, and never referenced it again because `early_stopping_rounds` was commented
-out. It now drives early stopping, and a test asserts the booster stops before
-exhausting its estimators.
+out. It now feeds `eval_set` and is scored every boosting round.
+
+Worth stating precisely, because it turned out to be diagnostic: with v1's
+hyperparameters early stopping never actually *fires*. The booster exhausts its
+round budget still improving. That is not a wiring fault, it is the clearest
+symptom of the underfitting described below — and it only became visible once
+the validation set was connected.
 
 **Model selection by an invented metric.** Models were ranked by
 `0.4·accuracy + 0.3·F1 + 0.3·AUC`, weights unexplained. The primary metric is
@@ -299,17 +397,45 @@ negative.
 
 ## Ablation
 
-What each fix was worth, tracked on XGBoost — the model v1 selected.
+What each change was worth, tracked on the boosted model — the one v1 selected
+and reported. Rows are cumulative: each changes one thing relative to the row
+above it.
+
+The first six rows are **correctness fixes**. The last two are **improvements**,
+kept visibly separate so that "what the bugs cost" and "what tuning bought"
+cannot be read as the same quantity.
 
 {ablation_table(ablation)}
 
-Accuracy is *expected* to fall when leakage is removed. That is the correct
-outcome and nothing here is tuned to recover it.
+Three results in that table are worth reading carefully.
+
+**Removing the leak changes nothing.** Not "a little" — the row is identical to
+the one above it. See the engineering notes above for why, and for why that is a
+fact about this dataset rather than a general licence.
+
+**Scaling is invisible here and enormous for the SVM.** On a tree model it does
+nothing, which is why v1's single-model scaling went unnoticed. The SVM table in
+`results/ablation.json` shows the same row moving that model by roughly 0.15
+macro F1, from a Luxury recall of exactly zero — it never predicted the class at
+all. The v1 report attributed that to the algorithm.
+
+**Tuning dominates.** The inherited `max_depth=4` was chosen for a 6,067-row
+experiment. On 233,544 training rows it starves the model: given a 3,000-round
+budget, that configuration is still improving at round 2,998. The tuned row is
+the largest single movement in the table.
+
+**The ordinal decomposition does not help.** Cumulative binary models
+(`src/ordinal.py`) put the tier ordering into the objective rather than only into
+the evaluation. Tested against the flat model at *both* hyperparameter settings —
+so the result is not an artifact of comparing two underfit models — it lands
+marginally behind each time. Reported because a negative result that cost real
+effort is more informative than silence about it.
 
 The first row is a **reconstruction**, not a reproduction. v1's input file no
 longer exists and no parse of the correct CSV recreates it, so the row is a
 stratified sample at v1's reported class proportions. It reproduces the shape of
-v1's experiment, not its rows.
+v1's experiment, not its rows — and notably it does not reproduce v1's reported
+accuracy either, which is itself a finding.
 
 ## Data quality
 
@@ -341,6 +467,17 @@ reference year. The model has no knowledge of any later market.
 
 **Geography is coarse.** Listings are located by state; local market conditions
 within a state are not represented.
+
+**The dataset is highly redundant.** Craigslist listings are crossposted across
+regions, so the same vehicle recurs many times. {redundancy_pct} of training rows
+share a feature vector with another training row, and {duplicate_pct} of test
+rows are indistinguishable from something the model trained on. The effective
+sample size is therefore smaller than {thousands(prov["n_rows"])}.
+
+This was checked rather than assumed: the error rate on duplicated test rows is
+{dup_error} against {unique_error} on unique ones. The model is not recalling
+relistings, so the headline metrics stand — but a future revision with different
+redundancy could behave differently, and the check now runs every time.
 
 **SVM is substituted on full data.** An exact RBF kernel does not terminate in
 reasonable time at this sample size, so `LinearSVC` with probability calibration
@@ -483,8 +620,19 @@ from fold-training data only.
 
 ## Known failure modes
 
-**Luxury is systematically pulled toward Premium.** {luxury_story(best)} This is
-the dominant error mode and it is directional, not random.
+**Errors concentrate at tier boundaries.** {dominant_error_story(best)}
+
+{error_distance_table(best)}
+
+Read that table before reading the accuracy figure. The great majority of
+mistakes are one-tier misses, which on a boundary drawn through a continuous and
+noisy price distribution is close to the floor of what is achievable. The
+minority that are two or three tiers out are the ones that would matter in use.
+
+**Luxury and Premium trade against each other.** {luxury_story(best)} Balanced
+weighting improves Luxury recall at the cost of Premium precision; the error
+relocates rather than disappearing. Which direction to prefer is a cost
+judgement this dataset cannot make.
 
 **Boundary listings are unstable.** A vehicle priced near a tier cut point can
 move tiers on a small change in mileage or age. The model reports a full
