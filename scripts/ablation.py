@@ -102,8 +102,27 @@ CONFIGURATIONS = [
     ),
     Configuration(
         "+ ordinal decomposition", "full", False, True, True, True,
-        "tier ordering moved into the objective via cumulative binary models",
-        xgb_variant="xgboost_ordinal",
+        "tier ordering moved into the objective via cumulative binary models, "
+        "at the tuned hyperparameters -- rows are cumulative, so pointing this "
+        "at the untuned variant would charge the decomposition for losing the "
+        "tuning as well",
+        xgb_variant="xgboost_ordinal_tuned",
+    ),
+    # NOT a cumulative step. This removes balanced weighting from the tuned
+    # configuration, to answer a question the cumulative table cannot: is the
+    # weighting still earning its place once the model has enough capacity?
+    #
+    # At v1's max_depth=4 it plainly did -- unweighted Luxury recall was 0.41.
+    # At depth 8 the unweighted model already reaches 0.66 recall at much higher
+    # precision, so the same precision-for-recall trade now costs more than it
+    # returns on the declared primary metric. Published because the brief lists
+    # balanced weighting as a defect fix, and at final hyperparameters that
+    # framing does not survive measurement.
+    Configuration(
+        "(tuned, weighting removed)", "full", False, True, False, True,
+        "comparison row, not a cumulative step: balanced weighting removed from "
+        "the tuned configuration",
+        xgb_variant="xgboost_tuned",
     ),
 ]
 
