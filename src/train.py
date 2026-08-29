@@ -168,6 +168,7 @@ def train_all(
     artifacts: list[dict] = []
     fitted_models: dict[str, Any] = {}
     timings: dict[str, float] = {}
+    run_ids: dict[str, str | None] = {}
     for name in models:
         print(f"  training {name} ...", end="", flush=True)
         t0 = time.perf_counter()
@@ -201,7 +202,10 @@ def train_all(
                 )
 
         if track:
-            metrics["mlflow_run_id"] = _mlflow_run(
+            # The run id is a fresh UUID every time, so it belongs with the
+            # other volatile fields in run_metadata rather than beside the
+            # metrics -- otherwise two identical runs can never compare equal.
+            run_ids[name] = _mlflow_run(
                 cfg, name, _params_for(name, cfg), metrics, fitted
             )
 
@@ -244,6 +248,14 @@ def train_all(
     figures = save_figures(artifacts, results, baseline, labels, cfg)
     print(f"\n  wrote {len(figures)} figures to {cfg['paths']['figures']}")
 
+    best_artifact = next(a for a in artifacts if a["name"] == best["model"])
+    integrity = data_integrity(X_train, X_test, y_test, best_artifact["y_pred"])
+    print(
+        f"  duplicate test rows: {integrity['test_duplicate_pct']}%"
+        f"  |  error rate {integrity['error_rate_on_duplicated']} vs "
+        f"{integrity['error_rate_on_unique']} on unique"
+    )
+
     model_path = save_model(
         fitted_models[best["model"]], best["model"], labels, list(X.columns), cfg
     )
@@ -256,6 +268,7 @@ def train_all(
             "timestamp": datetime.now(UTC).isoformat(timespec="seconds"),
             "duration_s": round(time.perf_counter() - started, 1),
             "fit_seconds": timings,
+            "mlflow_run_ids": run_ids,
             "python": platform.python_version(),
             "platform": platform.platform(),
             "figures": [Path(f).name for f in figures],
@@ -277,6 +290,9 @@ def train_all(
             "composite_score_used": cfg["evaluation"]["composite_score"],
         },
         "class_labels": labels,
+        # Redundancy diagnostic for the selected model. Not a pipeline defect,
+        # but the one memorisation channel the leakage tests cannot reach.
+        "data_integrity": integrity,
         "split": {
             "train": int(len(X_train)),
             "val": int(len(X_val)),
@@ -284,6 +300,55 @@ def train_all(
         },
         "baseline": baseline,
         "models": results,
+    }
+
+
+def data_integrity(
+    X_train: pd.DataFrame,
+    X_test: pd.DataFrame,
+    y_test: np.ndarray,
+    y_pred: np.ndarray,
+) -> dict:
+    """How much of the test set is indistinguishable from training rows?
+
+    Craigslist listings are crossposted across regions, so the same vehicle
+    appears many times. That is not a pipeline defect -- no transform is fitted
+    on the wrong rows -- but it is a memorisation channel the leakage tests
+    cannot see, and it would inflate every metric here if the model exploited
+    it.
+
+    The operative definition is not "the same listing" but "a feature vector the
+    model cannot tell apart from one it trained on", which is what actually
+    enables memorisation.
+
+    The diagnostic is the comparison at the end: if the error rate on duplicated
+    test rows is materially lower than on unique ones, the model is recalling
+    rather than generalising and the headline metrics are not trustworthy.
+    """
+    train_sig = pd.util.hash_pandas_object(X_train, index=False).to_numpy()
+    test_sig = pd.util.hash_pandas_object(X_test, index=False).to_numpy()
+
+    seen = set(train_sig.tolist())
+    duplicated = np.fromiter((s in seen for s in test_sig.tolist()), dtype=bool)
+    wrong = y_pred != y_test
+
+    n_dup = int(duplicated.sum())
+    err_dup = float(wrong[duplicated].mean()) if n_dup else None
+    err_unique = float(wrong[~duplicated].mean()) if n_dup < len(test_sig) else None
+
+    return {
+        "distinct_train_signatures": int(len(seen)),
+        "train_rows": int(len(X_train)),
+        "train_redundancy_pct": round((1 - len(seen) / len(X_train)) * 100, 2),
+        "test_rows_matching_a_train_row": n_dup,
+        "test_duplicate_pct": round(n_dup / len(test_sig) * 100, 2),
+        "error_rate_on_duplicated": round(err_dup, 4) if err_dup is not None else None,
+        "error_rate_on_unique": round(err_unique, 4) if err_unique is not None else None,
+        "memorisation_advantage": (
+            round(err_unique - err_dup, 4)
+            if err_dup is not None and err_unique is not None
+            else None
+        ),
     }
 
 

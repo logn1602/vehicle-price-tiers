@@ -188,6 +188,14 @@ def build_estimator(name: str, cfg: dict, n_classes: int, for_v1: bool = False) 
         if for_v1:
             # n=6,067 makes the exact RBF kernel cheap, so the v1 reconstruction
             # uses the same estimator v1 used.
+            #
+            # `probability=True` is deprecated in scikit-learn 1.9 and removed
+            # in 1.11, and the replacement -- CalibratedClassifierCV(SVC(),
+            # ensemble=False) -- is not numerically identical to SVC's internal
+            # Platt scaling. Fidelity wins here: the entire purpose of this
+            # branch is to run what v1 ran. When the pin has to move past 1.11
+            # this row's numbers will shift slightly and that should be recorded
+            # rather than absorbed silently.
             return SVC(
                 C=p["C"],
                 kernel="rbf",

@@ -136,6 +136,59 @@ def per_class_metrics(
     ]
 
 
+def error_profile(y_true: np.ndarray, y_pred: np.ndarray, labels: list[str]) -> dict:
+    """How far wrong the model is when it is wrong, and where.
+
+    On an ordinal target the *size* of an error is as informative as its
+    frequency: a model that is almost always one tier out is a different
+    proposition from one that scatters. Accuracy cannot express that difference
+    and neither can a confusion matrix at a glance.
+
+    Recorded here rather than derived in the README generator so that every
+    figure in the documentation traces back to this file -- scripts/
+    verify_readme.py enforces exactly that.
+    """
+    n = len(y_true)
+    distances = np.abs(y_true - y_pred)
+    errors = int((distances > 0).sum())
+
+    by_distance = []
+    for d in range(1, len(labels)):
+        count = int((distances == d).sum())
+        by_distance.append(
+            {
+                "distance": d,
+                "count": count,
+                "share_of_errors": round(count / errors, 4) if errors else 0.0,
+                "share_of_all": round(count / n, 4),
+            }
+        )
+
+    matrix = confusion_matrix(y_true, y_pred, labels=list(range(len(labels))))
+    cells = [
+        {
+            "true": labels[i],
+            "predicted": labels[j],
+            "count": int(matrix[i][j]),
+            "share_of_errors": round(int(matrix[i][j]) / errors, 4) if errors else 0.0,
+            "distance": abs(i - j),
+        }
+        for i in range(len(labels))
+        for j in range(len(labels))
+        if i != j
+    ]
+    cells.sort(key=lambda c: c["count"], reverse=True)
+
+    return {
+        "n_evaluated": n,
+        "n_correct": n - errors,
+        "n_errors": errors,
+        "error_rate": round(errors / n, 4),
+        "by_distance": by_distance,
+        "largest_confusions": cells[:5],
+    }
+
+
 def confusion(y_true: np.ndarray, y_pred: np.ndarray, labels: list[str]) -> dict:
     """Confusion matrix in raw counts and row-normalised form.
 
@@ -400,6 +453,7 @@ def evaluate_model(
     result["ordinal"] = ordinal_metrics(y_test, y_pred_test)
     result["per_class"] = per_class_metrics(y_test, y_pred_test, labels)
     result["confusion"] = confusion(y_test, y_pred_test, labels)
+    result["error_profile"] = error_profile(y_test, y_pred_test, labels)
     result["bootstrap"] = bootstrap_ci(
         y_test, y_pred_test, cfg["evaluation"]["primary_metric"], cfg
     )
