@@ -31,11 +31,18 @@ import yaml  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
 
+# Every committed artifact is a legitimate source of truth. A number that
+# appears in the documentation must be traceable to one of these; if it is not,
+# it was typed by a human and this script fails.
 ARTIFACTS = [
     "results/metrics.json",
     "results/lineage.json",
     "results/feature_manifest.json",
     "results/ablation.json",
+    "results/tuning.json",
+    "results/approach_validation.json",
+    "results/v1_load_diagnosis.json",
+    "results/v1_rowloss_diagnosis.json",
     "conf/config.yaml",
 ]
 

@@ -41,31 +41,37 @@ def canonical(payload: dict) -> str:
     return json.dumps(strip_volatile(payload), sort_keys=True, separators=(",", ":"))
 
 
-def first_difference(a: Any, b: Any, path: str = "") -> str | None:
-    """Locate the first divergence, so a failure is actionable."""
+def differences(a: Any, b: Any, path: str = "") -> list[str]:
+    """Every divergence, not just the first.
+
+    Reporting only the first is actively misleading: a trivial difference early
+    in the document hides whatever comes after it. The original version of this
+    function stopped at an MLflow run id -- a UUID that differs by design -- and
+    said nothing about whether any actual metric had moved.
+    """
     if type(a) is not type(b):
-        return f"{path or '<root>'}: type {type(a).__name__} vs {type(b).__name__}"
+        return [f"{path or '<root>'}: type {type(a).__name__} vs {type(b).__name__}"]
+
     if isinstance(a, dict):
+        found: list[str] = []
         for key in sorted(set(a) | set(b)):
             if key not in a:
-                return f"{path}.{key}: missing from run 1"
-            if key not in b:
-                return f"{path}.{key}: missing from run 2"
-            found = first_difference(a[key], b[key], f"{path}.{key}")
-            if found:
-                return found
-        return None
+                found.append(f"{path}.{key}: missing from run 1")
+            elif key not in b:
+                found.append(f"{path}.{key}: missing from run 2")
+            else:
+                found.extend(differences(a[key], b[key], f"{path}.{key}"))
+        return found
+
     if isinstance(a, list):
         if len(a) != len(b):
-            return f"{path}: length {len(a)} vs {len(b)}"
+            return [f"{path}: length {len(a)} vs {len(b)}"]
+        found = []
         for i, (x, y) in enumerate(zip(a, b, strict=True)):
-            found = first_difference(x, y, f"{path}[{i}]")
-            if found:
-                return found
-        return None
-    if a != b:
-        return f"{path}: {a!r} vs {b!r}"
-    return None
+            found.extend(differences(x, y, f"{path}[{i}]"))
+        return found
+
+    return [] if a == b else [f"{path}: {a!r} vs {b!r}"]
 
 
 def run_training(config: str) -> dict:
@@ -123,8 +129,12 @@ def main(argv: list[str] | None = None) -> int:
         print("\nIDENTICAL -- every metric reproduced exactly.")
         return 0
 
-    diff = first_difference(strip_volatile(first), strip_volatile(second))
-    print(f"\nDIFFER at {diff}")
+    found = differences(strip_volatile(first), strip_volatile(second))
+    print(f"\nDIFFER in {len(found)} field(s):\n")
+    for line in found[:40]:
+        print(f"  {line}")
+    if len(found) > 40:
+        print(f"  ... and {len(found) - 40} more")
     print(
         "\nSomething in the pipeline is unseeded. Every published figure is "
         "therefore a draw from an unknown distribution, not a measurement."
