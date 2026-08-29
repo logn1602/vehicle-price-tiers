@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.config import Config, load_config  # noqa: E402
 from src.ingest import build_gold, build_silver, ingest_bronze  # noqa: E402
+from src.pipeline import MODEL_NAMES  # noqa: E402
 from src.schema import RAW_COLUMNS  # noqa: E402
 from src.train import train_all  # noqa: E402
 from src.validate import LineageTracker  # noqa: E402
@@ -100,6 +101,18 @@ def smoke_config(base: dict, root: Path, raw: Path) -> Config:
 
     cfg["ingest"] = dict(cfg["ingest"])
     cfg["ingest"]["chunk_size"] = 1_000
+
+    # Cap the boosting budget. This job verifies that every stage composes, not
+    # that the models are any good -- the data is random, so the metrics are
+    # meaningless by construction. Letting the tuned configuration run its full
+    # 3,000 rounds at depth 8 would blow the two-minute budget to measure
+    # nothing. Quality is measured by the real pipeline, on real data.
+    cfg["model"] = copy.deepcopy(cfg["model"])
+    for block in ("xgboost", "xgboost_tuned"):
+        cfg["model"][block]["n_estimators"] = min(
+            cfg["model"][block]["n_estimators"], 60
+        )
+    cfg["model"]["random_forest"]["n_estimators"] = 25
     return Config(cfg)
 
 
@@ -146,7 +159,11 @@ def main(argv: list[str] | None = None) -> int:
         assert bronze["stats"]["rows"] == args.rows, "bronze lost rows"
         assert silver["rows_out"] < bronze["stats"]["rows"], "quality gates removed nothing"
         assert gold["n_features"] == sum(gold["feature_groups"].values())
-        assert len(payload["models"]) == 5, "not every model trained"
+        # Compare against the registry rather than a literal, so adding a model
+        # does not silently skip it here.
+        assert len(payload["models"]) == len(MODEL_NAMES), (
+            f"trained {len(payload['models'])} of {len(MODEL_NAMES)} models"
+        )
         assert payload["baseline"]["accuracy"] > 0
         for model in payload["models"]:
             assert 0.0 <= model["macro_f1"] <= 1.0
