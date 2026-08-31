@@ -157,7 +157,7 @@ def build_estimator(name: str, cfg: dict, n_classes: int, for_v1: bool = False) 
             objective="multi:softprob",
             num_class=n_classes,
             random_state=seed,
-            n_jobs=-1,
+            n_jobs=m.get("n_jobs", 4),
             # xgboost >= 2.0 takes early_stopping_rounds on the constructor,
             # not on fit(). v1's commented-out line was already stale syntax.
             **p,
@@ -174,7 +174,7 @@ def build_estimator(name: str, cfg: dict, n_classes: int, for_v1: bool = False) 
         base = XGBClassifier(
             objective="binary:logistic",
             random_state=seed,
-            n_jobs=-1,
+            n_jobs=m.get("n_jobs", 4),
             **p,
         )
         return OrdinalClassifier(estimator=base, n_classes=n_classes)

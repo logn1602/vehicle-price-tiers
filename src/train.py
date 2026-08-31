@@ -12,6 +12,7 @@ between runs, which is what the reproducibility check asserts.
 
 from __future__ import annotations
 
+import gc
 import json
 import platform
 import time
@@ -166,7 +167,12 @@ def train_all(
 
     results: list[dict] = []
     artifacts: list[dict] = []
-    fitted_models: dict[str, Any] = {}
+    # Only the winner is kept. Holding every fitted pipeline exhausted memory on
+    # an 8 GB machine at the seventh model -- six boosted models, one of them an
+    # ordinal decomposition carrying three boosters of its own, none of which
+    # were ever used again. The selection rule is known as each model finishes,
+    # so there is no reason to retain the losers.
+    best_so_far: tuple[float, float, str, Any] | None = None
     timings: dict[str, float] = {}
     run_ids: dict[str, str | None] = {}
     for name in models:
@@ -210,7 +216,13 @@ def train_all(
             )
 
         results.append(metrics)
-        fitted_models[name] = fitted
+
+        ranking = (
+            metrics[cfg["evaluation"]["primary_metric"]],
+            metrics["ordinal"][cfg["evaluation"]["tie_breaker"]],
+        )
+        if best_so_far is None or ranking > best_so_far[:2]:
+            best_so_far = (*ranking, name, fitted)
         # Timings are volatile, so they live in run_metadata rather than beside
         # the metrics; otherwise two identical runs would never compare equal.
         timings[name] = round(elapsed, 2)
@@ -232,6 +244,13 @@ def train_all(
                 "feature_names": metrics["selected_features"],
             }
         )
+
+        # Release the fitted pipeline unless it is the current leader. A boosted
+        # model at depth 8 with ~1,600 rounds is hundreds of megabytes, and
+        # retaining every one of them is what exhausted memory previously.
+        if best_so_far is None or fitted is not best_so_far[3]:
+            del fitted, pipe
+            gc.collect()
 
         print(
             f" macro F1 {metrics['macro_f1']:.4f}  acc {metrics['accuracy']:.4f}"
@@ -256,8 +275,14 @@ def train_all(
         f"{integrity['error_rate_on_unique']} on unique"
     )
 
+    if best_so_far is None or best_so_far[2] != best["model"]:
+        raise RuntimeError(
+            f"incremental winner {best_so_far[2] if best_so_far else None!r} "
+            f"disagrees with the final ranking {best['model']!r}"
+        )
+
     model_path = save_model(
-        fitted_models[best["model"]], best["model"], labels, list(X.columns), cfg
+        best_so_far[3], best["model"], labels, list(X.columns), cfg
     )
     print(f"  saved {best['model']} to {model_path}")
 

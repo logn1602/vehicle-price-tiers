@@ -163,6 +163,16 @@ pipeline:
   scaler: robust
 
 model:
+  # Thread count for the boosted models. Not a hyperparameter -- with the
+  # histogram tree method the fitted model is identical regardless -- but each
+  # worker thread carries its own gradient and histogram buffers, so the count
+  # sets peak memory.
+  #
+  # Left at 4 rather than -1 because this project was built on an 8 GB machine
+  # with 4 physical cores, where depth-8 boosting on 233k rows across 8 threads
+  # exhausted memory outright. Raise it on a larger box; results will not move.
+  n_jobs: 4
+
   # v1's hyperparameters, kept verbatim so the ablation is apples-to-apples.
   xgboost:
     max_depth: 4
